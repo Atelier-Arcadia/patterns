@@ -1,0 +1,27 @@
+{
+  "name": "@atelier/patterns",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pattern Discovery MCP Server — hierarchical pattern database for LLM interactions",
+  "scripts": {
+    "build": "tsc",
+    "start:stdio": "tsx src/stdio.ts",
+    "start:http": "tsx src/http.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^12.6.2",
+    "express": "^5.1.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.1"
+  }
+}
