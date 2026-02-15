@@ -544,6 +544,38 @@ describe("SqlitePatternStore", () => {
     it("returns undefined for nonexistent submission id", () => {
       expect(store.getSubmission(99999)).toBeUndefined();
     });
+
+    it("stores and retrieves source field when provided", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "sourced-pattern",
+        description: "d",
+        intention: "i",
+        template: "t",
+        source: "mcp:claude-code:user123",
+      });
+
+      const sub = store.getSubmission(id);
+      expect(sub).toBeDefined();
+      expect(sub!.source).toBe("mcp:claude-code:user123");
+    });
+
+    it("defaults source to null when not provided", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "no-source",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      const sub = store.getSubmission(id);
+      expect(sub!.source).toBeNull();
+    });
   });
 
   describe("reviewSubmission", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { SqlitePatternStore } from "../src/sqlite-store.js";
-import { createDiscoverHandler, createMatchHandler } from "../src/tools.js";
+import { createDiscoverHandler, createMatchHandler, createSuggestHandler } from "../src/tools.js";
 
 function seedTestStore(store: SqlitePatternStore): void {
   store.addDomain({ slug: "test-domain", name: "Test Domain", description: "A test domain for unit tests" });
@@ -30,6 +30,7 @@ describe("Tool Handlers", () => {
   let store: SqlitePatternStore;
   let discoverHandler: ReturnType<typeof createDiscoverHandler>;
   let matchHandler: ReturnType<typeof createMatchHandler>;
+  let suggestHandler: ReturnType<typeof createSuggestHandler>;
 
   beforeAll(() => {
     store = new SqlitePatternStore(":memory:");
@@ -37,6 +38,7 @@ describe("Tool Handlers", () => {
     seedTestStore(store);
     discoverHandler = createDiscoverHandler(store);
     matchHandler = createMatchHandler(store);
+    suggestHandler = createSuggestHandler(store);
   });
 
   afterAll(() => {
@@ -126,6 +128,119 @@ describe("Tool Handlers", () => {
       expect(data[0]).toHaveProperty("description");
       expect(data[0]).toHaveProperty("intention");
       expect(data[0]).toHaveProperty("template");
+    });
+  });
+
+  describe("suggest", () => {
+    it("creates a 'new' pattern suggestion with source", async () => {
+      const result = await suggestHandler({
+        type: "new",
+        domainSlug: "test-domain",
+        categorySlug: "widgets",
+        label: "suggested-widget",
+        description: "A suggested widget pattern",
+        intention: "User wants to suggest a widget",
+        template: "# Suggested Widget\n{{content}}",
+        source: "mcp:test-client",
+      });
+
+      expect(result.isError).toBeFalsy();
+
+      const data = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
+      expect(data.type).toBe("new");
+      expect(data.status).toBe("pending");
+      expect(data.label).toBe("suggested-widget");
+      expect(data.source).toBe("mcp:test-client");
+      expect(data.domainSlug).toBe("test-domain");
+      expect(data.categorySlug).toBe("widgets");
+    });
+
+    it("creates a 'modify' pattern suggestion with source", async () => {
+      const patterns = store.getPatternsWithIds("test-domain", ["widgets"]);
+      const targetId = patterns[0].id;
+
+      const result = await suggestHandler({
+        type: "modify",
+        targetPatternId: targetId,
+        label: "improved-widget",
+        description: "An improved widget pattern",
+        intention: "Better widget creation",
+        template: "# Improved Widget\n{{content}}",
+        source: "mcp:another-client",
+      });
+
+      expect(result.isError).toBeFalsy();
+
+      const data = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
+      expect(data.type).toBe("modify");
+      expect(data.status).toBe("pending");
+      expect(data.targetPatternId).toBe(targetId);
+      expect(data.source).toBe("mcp:another-client");
+    });
+
+    it("returns error when source is missing", async () => {
+      const result = await suggestHandler({
+        type: "new",
+        domainSlug: "test-domain",
+        categorySlug: "widgets",
+        label: "no-source",
+        description: "d",
+        intention: "i",
+        template: "t",
+        source: "",
+      });
+
+      expect(result.isError).toBe(true);
+      const text = (result.content[0] as { type: "text"; text: string }).text;
+      expect(text).toContain("source");
+    });
+
+    it("returns error when required fields are missing", async () => {
+      const result = await suggestHandler({
+        type: "new",
+        domainSlug: "test-domain",
+        categorySlug: "widgets",
+        label: "",
+        description: "d",
+        intention: "i",
+        template: "t",
+        source: "mcp:test",
+      });
+
+      expect(result.isError).toBe(true);
+    });
+
+    it("returns error for invalid type", async () => {
+      const result = await suggestHandler({
+        type: "invalid" as any,
+        label: "x",
+        description: "d",
+        intention: "i",
+        template: "t",
+        source: "mcp:test",
+      });
+
+      expect(result.isError).toBe(true);
+      const text = (result.content[0] as { type: "text"; text: string }).text;
+      expect(text).toContain("type");
+    });
+
+    it("suggestion appears in pending submissions", async () => {
+      const beforeCount = store.getSubmissions("pending").length;
+
+      await suggestHandler({
+        type: "new",
+        domainSlug: "test-domain",
+        categorySlug: "gadgets",
+        label: "count-check",
+        description: "d",
+        intention: "i",
+        template: "t",
+        source: "mcp:count-test",
+      });
+
+      const afterCount = store.getSubmissions("pending").length;
+      expect(afterCount).toBe(beforeCount + 1);
     });
   });
 });

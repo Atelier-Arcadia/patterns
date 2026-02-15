@@ -47,7 +47,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
   // -- Submissions (public: create, admin: list + review) --
 
   router.post("/submissions", (req, res) => {
-    const { type, targetPatternId, domainSlug, categorySlug, label, description, intention, template } = req.body ?? {};
+    const { type, targetPatternId, domainSlug, categorySlug, label, description, intention, template, source } = req.body ?? {};
 
     if (!type || !label || !description || !intention || !template) {
       res.status(400).json({ error: "Missing required fields: type, label, description, intention, template" });
@@ -69,6 +69,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
         description,
         intention,
         template,
+        source,
       });
 
       const sub = store.getSubmission(id);

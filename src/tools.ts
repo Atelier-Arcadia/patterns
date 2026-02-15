@@ -1,4 +1,4 @@
-import type { PatternStore } from "./types.js";
+import type { PatternStore, SubmissionStore } from "./types.js";
 
 interface ToolResult {
   [key: string]: unknown;
@@ -64,5 +64,92 @@ export function createMatchHandler(db: PatternStore) {
     return {
       content: [{ type: "text", text: JSON.stringify(patterns, null, 2) }],
     };
+  };
+}
+
+/**
+ * Creates a handler for the `suggest` tool.
+ * Allows LLM users to submit pattern suggestions (new or edit) with a source identifier.
+ */
+export function createSuggestHandler(db: PatternStore & SubmissionStore) {
+  return async (args: {
+    type: string;
+    domainSlug?: string;
+    categorySlug?: string;
+    targetPatternId?: number;
+    label: string;
+    description: string;
+    intention: string;
+    template: string;
+    source: string;
+  }): Promise<ToolResult> => {
+    // Validate source
+    if (!args.source) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "A source identifier is required to attribute the origin of the suggestion.",
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    // Validate type
+    if (args.type !== "new" && args.type !== "modify") {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Invalid type: "${args.type}". Must be "new" or "modify".`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    // Validate required pattern fields
+    if (!args.label || !args.description || !args.intention || !args.template) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Missing required fields: label, description, intention, and template are all required.",
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    try {
+      const id = db.addSubmission({
+        type: args.type,
+        targetPatternId: args.targetPatternId,
+        domainSlug: args.domainSlug,
+        categorySlug: args.categorySlug,
+        label: args.label,
+        description: args.description,
+        intention: args.intention,
+        template: args.template,
+        source: args.source,
+      });
+
+      const submission = db.getSubmission(id);
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(submission, null, 2) }],
+      };
+    } catch (err: any) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to create suggestion: ${err.message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
   };
 }

@@ -51,6 +51,7 @@ export interface Submission {
   description: string;
   intention: string;
   template: string;
+  source: string | null;
   submittedAt: string;
   reviewedAt: string | null;
 }
@@ -67,6 +68,7 @@ export interface SubmissionInput {
   description: string;
   intention: string;
   template: string;
+  source?: string;
 }
 
 /**
@@ -77,4 +79,14 @@ export interface PatternStore {
   getDomain(slug: string): Domain | undefined;
   getCategories(domainSlug: string): Category[];
   getPatterns(domainSlug: string, categorySlugs: string[]): Pattern[];
+}
+
+/**
+ * Extended store interface that includes submission capabilities.
+ * Used by MCP tools that need to create suggestions.
+ */
+export interface SubmissionStore {
+  addSubmission(input: SubmissionInput): number;
+  getSubmission(id: number): Submission | undefined;
+  getSubmissions(status?: "pending" | "accepted" | "rejected"): Submission[];
 }

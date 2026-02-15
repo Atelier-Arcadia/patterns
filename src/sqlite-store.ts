@@ -1,12 +1,12 @@
 import Database from "better-sqlite3";
-import type { Domain, Category, Pattern, PatternStore, PatternWithId, Submission, SubmissionInput } from "./types.js";
+import type { Domain, Category, Pattern, PatternStore, PatternWithId, Submission, SubmissionInput, SubmissionStore } from "./types.js";
 
 /**
  * SQLite-backed pattern store with a 3-table relational schema
  * mirroring the Domain > Category > Pattern hierarchy,
  * plus a submissions table for contributor proposals.
  */
-export class SqlitePatternStore implements PatternStore {
+export class SqlitePatternStore implements PatternStore, SubmissionStore {
   private db: Database.Database;
 
   constructor(dbPath: string) {
@@ -58,11 +58,18 @@ export class SqlitePatternStore implements PatternStore {
         description TEXT NOT NULL,
         intention TEXT NOT NULL,
         template TEXT NOT NULL,
+        source TEXT,
         submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
         reviewed_at TEXT,
         FOREIGN KEY (target_pattern_id) REFERENCES patterns(id) ON DELETE SET NULL
       );
     `);
+
+    // Migration: add source column if it doesn't exist (for existing databases)
+    const columns = this.db.pragma("table_info(submissions)") as Array<{ name: string }>;
+    if (!columns.some((c) => c.name === "source")) {
+      this.db.exec("ALTER TABLE submissions ADD COLUMN source TEXT");
+    }
   }
 
   /**
@@ -388,8 +395,8 @@ export class SqlitePatternStore implements PatternStore {
   addSubmission(input: SubmissionInput): number {
     const result = this.db
       .prepare(
-        `INSERT INTO submissions (type, target_pattern_id, domain_slug, category_slug, label, description, intention, template)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO submissions (type, target_pattern_id, domain_slug, category_slug, label, description, intention, template, source)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.type,
@@ -399,7 +406,8 @@ export class SqlitePatternStore implements PatternStore {
         input.label,
         input.description,
         input.intention,
-        input.template
+        input.template,
+        input.source ?? null
       );
 
     return result.lastInsertRowid as number;
@@ -413,7 +421,7 @@ export class SqlitePatternStore implements PatternStore {
       return this.db
         .prepare(
           `SELECT id, type, status, target_pattern_id, domain_slug, category_slug,
-                  label, description, intention, template, submitted_at, reviewed_at
+                  label, description, intention, template, source, submitted_at, reviewed_at
            FROM submissions WHERE status = ? ORDER BY id DESC`
         )
         .all(status)
@@ -423,7 +431,7 @@ export class SqlitePatternStore implements PatternStore {
     return this.db
       .prepare(
         `SELECT id, type, status, target_pattern_id, domain_slug, category_slug,
-                label, description, intention, template, submitted_at, reviewed_at
+                label, description, intention, template, source, submitted_at, reviewed_at
          FROM submissions ORDER BY id DESC`
       )
       .all()
@@ -437,7 +445,7 @@ export class SqlitePatternStore implements PatternStore {
     const row = this.db
       .prepare(
         `SELECT id, type, status, target_pattern_id, domain_slug, category_slug,
-                label, description, intention, template, submitted_at, reviewed_at
+                label, description, intention, template, source, submitted_at, reviewed_at
          FROM submissions WHERE id = ?`
       )
       .get(id);
@@ -500,6 +508,7 @@ export class SqlitePatternStore implements PatternStore {
       description: row.description,
       intention: row.intention,
       template: row.template,
+      source: row.source ?? null,
       submittedAt: row.submitted_at,
       reviewedAt: row.reviewed_at,
     };

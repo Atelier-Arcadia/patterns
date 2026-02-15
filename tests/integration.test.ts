@@ -54,7 +54,7 @@ describe("MCP Integration", () => {
   it("lists available tools", async () => {
     const result = await client.listTools();
     const toolNames = result.tools.map((t) => t.name).sort();
-    expect(toolNames).toEqual(["discover", "match"]);
+    expect(toolNames).toEqual(["discover", "match", "suggest"]);
   });
 
   it("discover tool returns categories", async () => {
@@ -106,6 +106,74 @@ describe("MCP Integration", () => {
       name: "discover",
       arguments: { domain: "nonexistent" },
     });
+    expect(result.isError).toBe(true);
+  });
+
+  it("suggest tool creates a new pattern submission", async () => {
+    const result = await client.callTool({
+      name: "suggest",
+      arguments: {
+        type: "new",
+        domainSlug: "test-domain",
+        categorySlug: "widgets",
+        label: "mcp-suggested-pattern",
+        description: "Pattern suggested via MCP",
+        intention: "User wants to suggest a pattern from their LLM session",
+        template: "# MCP Suggestion\n{{content}}",
+        source: "mcp:integration-test",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse((result.content as any)[0].text);
+    expect(data.status).toBe("pending");
+    expect(data.label).toBe("mcp-suggested-pattern");
+    expect(data.source).toBe("mcp:integration-test");
+
+    // Verify it landed in the store
+    const sub = store.getSubmission(data.id);
+    expect(sub).toBeDefined();
+    expect(sub!.source).toBe("mcp:integration-test");
+  });
+
+  it("suggest tool creates a modify submission", async () => {
+    const patterns = store.getPatternsWithIds("test-domain", ["widgets"]);
+    const targetId = patterns[0].id;
+
+    const result = await client.callTool({
+      name: "suggest",
+      arguments: {
+        type: "modify",
+        targetPatternId: targetId,
+        label: "improved-create-widget",
+        description: "Better widget creation",
+        intention: "Improved widget creation flow",
+        template: "# Better Widget\n{{content}}",
+        source: "mcp:integration-test",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse((result.content as any)[0].text);
+    expect(data.type).toBe("modify");
+    expect(data.targetPatternId).toBe(targetId);
+  });
+
+  it("suggest tool returns error without source", async () => {
+    const result = await client.callTool({
+      name: "suggest",
+      arguments: {
+        type: "new",
+        domainSlug: "test-domain",
+        categorySlug: "widgets",
+        label: "no-source",
+        description: "d",
+        intention: "i",
+        template: "t",
+        source: "",
+      },
+    });
+
     expect(result.isError).toBe(true);
   });
 });
