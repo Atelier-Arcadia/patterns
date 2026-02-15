@@ -186,4 +186,252 @@ describe("SqlitePatternStore", () => {
       expect(domain!.categories[0].patterns[0].label).toBe("create-feature");
     });
   });
+
+  // === NEW: Mutation methods ===
+
+  describe("updateDomain", () => {
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+    });
+
+    it("updates domain name", () => {
+      store.updateDomain("eng", { name: "Software Engineering" });
+      const domain = store.getDomain("eng");
+      expect(domain!.name).toBe("Software Engineering");
+      expect(domain!.description).toBe("Eng"); // unchanged
+    });
+
+    it("updates domain description", () => {
+      store.updateDomain("eng", { description: "Updated description" });
+      const domain = store.getDomain("eng");
+      expect(domain!.name).toBe("Engineering"); // unchanged
+      expect(domain!.description).toBe("Updated description");
+    });
+
+    it("updates both name and description", () => {
+      store.updateDomain("eng", { name: "New Name", description: "New Desc" });
+      const domain = store.getDomain("eng");
+      expect(domain!.name).toBe("New Name");
+      expect(domain!.description).toBe("New Desc");
+    });
+
+    it("throws for nonexistent domain", () => {
+      expect(() => store.updateDomain("nonexistent", { name: "X" })).toThrow();
+    });
+  });
+
+  describe("deleteDomain", () => {
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+    });
+
+    it("deletes a domain", () => {
+      store.deleteDomain("eng");
+      expect(store.getDomain("eng")).toBeUndefined();
+      expect(store.getDomains()).toHaveLength(0);
+    });
+
+    it("cascades to categories and patterns", () => {
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+      store.addPattern("eng", "features", {
+        label: "p1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.deleteDomain("eng");
+      expect(store.getCategories("eng")).toEqual([]);
+      expect(store.getPatterns("eng", ["features"])).toEqual([]);
+    });
+
+    it("throws for nonexistent domain", () => {
+      expect(() => store.deleteDomain("nonexistent")).toThrow();
+    });
+  });
+
+  describe("updateCategory", () => {
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature patterns" });
+    });
+
+    it("updates category name", () => {
+      store.updateCategory("eng", "features", { name: "Feature Requests" });
+      const categories = store.getCategories("eng");
+      expect(categories[0].name).toBe("Feature Requests");
+      expect(categories[0].description).toBe("Feature patterns"); // unchanged
+    });
+
+    it("updates category description", () => {
+      store.updateCategory("eng", "features", { description: "Updated" });
+      const categories = store.getCategories("eng");
+      expect(categories[0].description).toBe("Updated");
+      expect(categories[0].name).toBe("Features"); // unchanged
+    });
+
+    it("throws for nonexistent domain", () => {
+      expect(() => store.updateCategory("nonexistent", "features", { name: "X" })).toThrow();
+    });
+
+    it("throws for nonexistent category", () => {
+      expect(() => store.updateCategory("eng", "nonexistent", { name: "X" })).toThrow();
+    });
+  });
+
+  describe("deleteCategory", () => {
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+    });
+
+    it("deletes a category", () => {
+      store.deleteCategory("eng", "features");
+      expect(store.getCategories("eng")).toHaveLength(0);
+    });
+
+    it("cascades to patterns", () => {
+      store.addPattern("eng", "features", {
+        label: "p1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+      store.deleteCategory("eng", "features");
+      expect(store.getPatterns("eng", ["features"])).toEqual([]);
+    });
+
+    it("throws for nonexistent category", () => {
+      expect(() => store.deleteCategory("eng", "nonexistent")).toThrow();
+    });
+  });
+
+  describe("getPatternsWithIds", () => {
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+    });
+
+    it("returns patterns with numeric ids", () => {
+      store.addPattern("eng", "features", {
+        label: "p1",
+        description: "d1",
+        intention: "i1",
+        template: "t1",
+      });
+      store.addPattern("eng", "features", {
+        label: "p2",
+        description: "d2",
+        intention: "i2",
+        template: "t2",
+      });
+
+      const patterns = store.getPatternsWithIds("eng", ["features"]);
+      expect(patterns).toHaveLength(2);
+      expect(patterns[0]).toHaveProperty("id");
+      expect(typeof patterns[0].id).toBe("number");
+      expect(patterns[0].label).toBe("p1");
+      expect(patterns[1].label).toBe("p2");
+    });
+
+    it("returns empty array for unknown domain", () => {
+      expect(store.getPatternsWithIds("nonexistent", ["features"])).toEqual([]);
+    });
+  });
+
+  describe("updatePattern", () => {
+    let patternId: number;
+
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+      store.addPattern("eng", "features", {
+        label: "p1",
+        description: "Original desc",
+        intention: "Original intention",
+        template: "Original template",
+      });
+      const patterns = store.getPatternsWithIds("eng", ["features"]);
+      patternId = patterns[0].id;
+    });
+
+    it("updates pattern label", () => {
+      store.updatePattern(patternId, { label: "new-label" });
+      const patterns = store.getPatternsWithIds("eng", ["features"]);
+      expect(patterns[0].label).toBe("new-label");
+      expect(patterns[0].description).toBe("Original desc"); // unchanged
+    });
+
+    it("updates pattern description", () => {
+      store.updatePattern(patternId, { description: "New desc" });
+      const patterns = store.getPatternsWithIds("eng", ["features"]);
+      expect(patterns[0].description).toBe("New desc");
+    });
+
+    it("updates pattern intention", () => {
+      store.updatePattern(patternId, { intention: "New intention" });
+      const patterns = store.getPatternsWithIds("eng", ["features"]);
+      expect(patterns[0].intention).toBe("New intention");
+    });
+
+    it("updates pattern template", () => {
+      store.updatePattern(patternId, { template: "New template" });
+      const patterns = store.getPatternsWithIds("eng", ["features"]);
+      expect(patterns[0].template).toBe("New template");
+    });
+
+    it("updates multiple fields at once", () => {
+      store.updatePattern(patternId, { label: "x", description: "y", intention: "z", template: "w" });
+      const patterns = store.getPatternsWithIds("eng", ["features"]);
+      expect(patterns[0].label).toBe("x");
+      expect(patterns[0].description).toBe("y");
+      expect(patterns[0].intention).toBe("z");
+      expect(patterns[0].template).toBe("w");
+    });
+
+    it("throws for nonexistent pattern id", () => {
+      expect(() => store.updatePattern(99999, { label: "x" })).toThrow();
+    });
+  });
+
+  describe("deletePattern", () => {
+    let patternId: number;
+
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+      store.addPattern("eng", "features", {
+        label: "p1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+      const patterns = store.getPatternsWithIds("eng", ["features"]);
+      patternId = patterns[0].id;
+    });
+
+    it("deletes a pattern by id", () => {
+      store.deletePattern(patternId);
+      const patterns = store.getPatterns("eng", ["features"]);
+      expect(patterns).toHaveLength(0);
+    });
+
+    it("throws for nonexistent pattern id", () => {
+      expect(() => store.deletePattern(99999)).toThrow();
+    });
+
+    it("only deletes the targeted pattern", () => {
+      store.addPattern("eng", "features", {
+        label: "p2",
+        description: "d2",
+        intention: "i2",
+        template: "t2",
+      });
+
+      store.deletePattern(patternId);
+      const patterns = store.getPatterns("eng", ["features"]);
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].label).toBe("p2");
+    });
+  });
 });

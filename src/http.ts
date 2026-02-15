@@ -2,6 +2,7 @@ import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SqlitePatternStore } from "./sqlite-store.js";
 import { createServer } from "./server.js";
+import { createApiRouter } from "./api.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -16,6 +17,12 @@ store.initialize();
 
 const app = express();
 app.use(express.json());
+
+// Serve the management web app
+app.use(express.static(join(__dirname, "public")));
+
+// Mount the REST API for CRUD operations
+app.use("/api", createApiRouter(store));
 
 // Map of active transports by session ID
 const transports = new Map<string, StreamableHTTPServerTransport>();
@@ -54,4 +61,5 @@ app.all("/mcp", async (req, res) => {
 
 app.listen(PORT, "127.0.0.1", () => {
   console.error(`Pattern Discovery MCP Server running on http://127.0.0.1:${PORT}/mcp`);
+  console.error(`Pattern Manager UI available at http://127.0.0.1:${PORT}/`);
 });

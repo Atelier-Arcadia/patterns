@@ -9,6 +9,13 @@ export interface Pattern {
 }
 
 /**
+ * A pattern with its database id, used for update/delete operations.
+ */
+export interface PatternWithId extends Pattern {
+  id: number;
+}
+
+/**
  * A category groups related patterns within a domain.
  */
 export interface Category {
