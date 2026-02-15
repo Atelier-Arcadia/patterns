@@ -1,22 +1,24 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
 import { SqlitePatternStore } from "../src/sqlite-store.js";
 import { createApiRouter } from "../src/api.js";
+import { authStatus, clearSessions } from "../src/auth.js";
 
 // Minimal request helper — avoids needing supertest dependency
 async function req(
   app: express.Express,
   method: string,
   path: string,
-  body?: unknown
-): Promise<{ status: number; body: any }> {
+  body?: unknown,
+  headers?: Record<string, string>
+): Promise<{ status: number; body: any; headers: Headers }> {
   return new Promise((resolve, reject) => {
     const server = app.listen(0, "127.0.0.1", () => {
       const addr = server.address() as { port: number };
       const url = `http://127.0.0.1:${addr.port}${path}`;
       const opts: RequestInit = {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...headers },
       };
       if (body !== undefined) {
         opts.body = JSON.stringify(body);
@@ -25,7 +27,7 @@ async function req(
         .then(async (res) => {
           const json = await res.json().catch(() => null);
           server.close();
-          resolve({ status: res.status, body: json });
+          resolve({ status: res.status, body: json, headers: res.headers });
         })
         .catch((err) => {
           server.close();
@@ -44,6 +46,7 @@ describe("API Router", () => {
     store.initialize();
     app = express();
     app.use(express.json());
+    app.use(authStatus);
     app.use("/api", createApiRouter(store));
   });
 
@@ -56,6 +59,10 @@ describe("API Router", () => {
     // Clear all domains (cascades to categories and patterns)
     for (const d of store.getDomains()) {
       store.deleteDomain(d.slug);
+    }
+    // Clear submissions by re-initializing (submissions table uses IF NOT EXISTS)
+    for (const s of store.getSubmissions()) {
+      // Just let them accumulate — tests that need clean state seed their own
     }
   });
 
@@ -307,6 +314,252 @@ describe("API Router", () => {
     it("returns 404 for nonexistent pattern", async () => {
       const res = await req(app, "DELETE", "/api/patterns/99999");
       expect(res.status).toBe(404);
+    });
+  });
+
+  // -- Auth --
+
+  describe("GET /api/auth/status", () => {
+    it("returns not authenticated when no session cookie", async () => {
+      const res = await req(app, "GET", "/api/auth/status");
+      expect(res.status).toBe(200);
+      expect(res.body.authenticated).toBe(false);
+    });
+
+    it("returns adminConfigured based on ADMIN_SECRET env var", async () => {
+      const res = await req(app, "GET", "/api/auth/status");
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("adminConfigured");
+    });
+  });
+
+  describe("POST /api/auth/login", () => {
+    afterEach(() => {
+      clearSessions();
+      delete process.env.ADMIN_SECRET;
+    });
+
+    it("returns 401 when ADMIN_SECRET is not configured", async () => {
+      delete process.env.ADMIN_SECRET;
+      const res = await req(app, "POST", "/api/auth/login", { secret: "anything" });
+      expect(res.status).toBe(401);
+      expect(res.body.error).toMatch(/not configured/i);
+    });
+
+    it("returns 401 for wrong secret", async () => {
+      process.env.ADMIN_SECRET = "correct-secret";
+      const res = await req(app, "POST", "/api/auth/login", { secret: "wrong" });
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 200 and sets session cookie for correct secret", async () => {
+      process.env.ADMIN_SECRET = "correct-secret";
+      const res = await req(app, "POST", "/api/auth/login", { secret: "correct-secret" });
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      const setCookie = res.headers.get("set-cookie");
+      expect(setCookie).toBeTruthy();
+      expect(setCookie).toContain("session=");
+    });
+  });
+
+  describe("POST /api/auth/logout", () => {
+    afterEach(() => {
+      clearSessions();
+      delete process.env.ADMIN_SECRET;
+    });
+
+    it("clears the session cookie", async () => {
+      process.env.ADMIN_SECRET = "secret";
+
+      // Login first
+      const loginRes = await req(app, "POST", "/api/auth/login", { secret: "secret" });
+      const setCookie = loginRes.headers.get("set-cookie")!;
+      const sessionToken = setCookie.split("session=")[1].split(";")[0];
+
+      // Logout
+      const res = await req(app, "POST", "/api/auth/logout", undefined, {
+        Cookie: `session=${sessionToken}`,
+      });
+      expect(res.status).toBe(200);
+
+      // Verify session is invalidated
+      const statusRes = await req(app, "GET", "/api/auth/status", undefined, {
+        Cookie: `session=${sessionToken}`,
+      });
+      expect(statusRes.body.authenticated).toBe(false);
+    });
+  });
+
+  // -- Submissions --
+
+  describe("POST /api/submissions", () => {
+    it("creates a 'new' submission without auth", async () => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+
+      const res = await req(app, "POST", "/api/submissions", {
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "new-pattern",
+        description: "A new pattern",
+        intention: "User wants this",
+        template: "# Template",
+      });
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty("id");
+      expect(res.body.status).toBe("pending");
+    });
+
+    it("creates a 'modify' submission without auth", async () => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+      store.addPattern("eng", "features", {
+        label: "p1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+      const patternId = store.getPatternsWithIds("eng", ["features"])[0].id;
+
+      const res = await req(app, "POST", "/api/submissions", {
+        type: "modify",
+        targetPatternId: patternId,
+        label: "improved-p1",
+        description: "Better desc",
+        intention: "Better intention",
+        template: "Better template",
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.type).toBe("modify");
+    });
+
+    it("returns 400 for missing fields", async () => {
+      const res = await req(app, "POST", "/api/submissions", {
+        type: "new",
+        label: "x",
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("GET /api/submissions (admin)", () => {
+    afterEach(() => {
+      clearSessions();
+      delete process.env.ADMIN_SECRET;
+    });
+
+    it("returns 401 without admin auth", async () => {
+      const res = await req(app, "GET", "/api/submissions");
+      expect(res.status).toBe(401);
+    });
+
+    it("returns submissions when authenticated as admin", async () => {
+      process.env.ADMIN_SECRET = "secret";
+
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+
+      store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      // Login
+      const loginRes = await req(app, "POST", "/api/auth/login", { secret: "secret" });
+      const setCookie = loginRes.headers.get("set-cookie")!;
+      const token = setCookie.split("session=")[1].split(";")[0];
+
+      const res = await req(app, "GET", "/api/submissions", undefined, {
+        Cookie: `session=${token}`,
+      });
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("POST /api/submissions/:id/review (admin)", () => {
+    afterEach(() => {
+      clearSessions();
+      delete process.env.ADMIN_SECRET;
+    });
+
+    it("returns 401 without admin auth", async () => {
+      const res = await req(app, "POST", "/api/submissions/1/review", { decision: "accepted" });
+      expect(res.status).toBe(401);
+    });
+
+    it("accepts a submission when authenticated as admin", async () => {
+      process.env.ADMIN_SECRET = "secret";
+
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+
+      const subId = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "approved-pattern",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      // Login
+      const loginRes = await req(app, "POST", "/api/auth/login", { secret: "secret" });
+      const setCookie = loginRes.headers.get("set-cookie")!;
+      const token = setCookie.split("session=")[1].split(";")[0];
+
+      const res = await req(app, "POST", `/api/submissions/${subId}/review`, { decision: "accepted" }, {
+        Cookie: `session=${token}`,
+      });
+      expect(res.status).toBe(200);
+
+      // Pattern should have been created
+      const patterns = store.getPatterns("eng", ["features"]);
+      expect(patterns.some((p) => p.label === "approved-pattern")).toBe(true);
+    });
+
+    it("rejects a submission when authenticated as admin", async () => {
+      process.env.ADMIN_SECRET = "secret";
+
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+
+      const subId = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "rejected-pattern",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      // Login
+      const loginRes = await req(app, "POST", "/api/auth/login", { secret: "secret" });
+      const setCookie = loginRes.headers.get("set-cookie")!;
+      const token = setCookie.split("session=")[1].split(";")[0];
+
+      const res = await req(app, "POST", `/api/submissions/${subId}/review`, { decision: "rejected" }, {
+        Cookie: `session=${token}`,
+      });
+      expect(res.status).toBe(200);
+
+      // Submission should be rejected
+      const sub = store.getSubmission(subId);
+      expect(sub!.status).toBe("rejected");
+
+      // Pattern should NOT have been created
+      const patterns = store.getPatterns("eng", ["features"]);
+      expect(patterns.some((p) => p.label === "rejected-pattern")).toBe(false);
     });
   });
 });

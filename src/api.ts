@@ -1,12 +1,115 @@
 import { Router } from "express";
 import type { SqlitePatternStore } from "./sqlite-store.js";
+import { login, logout, isAdminConfigured, parseCookie, requireAdmin } from "./auth.js";
 
 /**
  * Creates an Express router with REST endpoints for managing
- * the Domain > Category > Pattern hierarchy.
+ * the Domain > Category > Pattern hierarchy, plus auth and submissions.
  */
 export function createApiRouter(store: SqlitePatternStore): Router {
   const router = Router();
+
+  // -- Auth --
+
+  router.get("/auth/status", (req, res) => {
+    res.json({
+      authenticated: !!(req as any).isAdmin,
+      adminConfigured: isAdminConfigured(),
+    });
+  });
+
+  router.post("/auth/login", (req, res) => {
+    if (!isAdminConfigured()) {
+      res.status(401).json({ error: "Admin access is not configured. Set the ADMIN_SECRET environment variable." });
+      return;
+    }
+
+    const { secret } = req.body ?? {};
+    const token = login(secret ?? "");
+    if (!token) {
+      res.status(401).json({ error: "Invalid secret" });
+      return;
+    }
+
+    res.setHeader("Set-Cookie", `session=${token}; Path=/; HttpOnly; SameSite=Strict`);
+    res.json({ ok: true });
+  });
+
+  router.post("/auth/logout", (req, res) => {
+    const token = parseCookie(req.headers.cookie, "session");
+    if (token) {
+      logout(token);
+    }
+    res.setHeader("Set-Cookie", "session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+    res.json({ ok: true });
+  });
+
+  // -- Submissions (public: create, admin: list + review) --
+
+  router.post("/submissions", (req, res) => {
+    const { type, targetPatternId, domainSlug, categorySlug, label, description, intention, template } = req.body ?? {};
+
+    if (!type || !label || !description || !intention || !template) {
+      res.status(400).json({ error: "Missing required fields: type, label, description, intention, template" });
+      return;
+    }
+
+    if (type !== "new" && type !== "modify") {
+      res.status(400).json({ error: "type must be 'new' or 'modify'" });
+      return;
+    }
+
+    try {
+      const id = store.addSubmission({
+        type,
+        targetPatternId,
+        domainSlug,
+        categorySlug,
+        label,
+        description,
+        intention,
+        template,
+      });
+
+      const sub = store.getSubmission(id);
+      res.status(201).json(sub);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.get("/submissions", requireAdmin, (req, res) => {
+    const status = req.query.status as "pending" | "accepted" | "rejected" | undefined;
+    const submissions = store.getSubmissions(status);
+    res.json(submissions);
+  });
+
+  router.post("/submissions/:id/review", requireAdmin, (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid submission id" });
+      return;
+    }
+
+    const { decision } = req.body ?? {};
+    if (decision !== "accepted" && decision !== "rejected") {
+      res.status(400).json({ error: "decision must be 'accepted' or 'rejected'" });
+      return;
+    }
+
+    try {
+      store.reviewSubmission(id, decision);
+      res.json({ ok: true });
+    } catch (err: any) {
+      if (err.message?.includes("not found")) {
+        res.status(404).json({ error: err.message });
+      } else if (err.message?.includes("already been reviewed")) {
+        res.status(409).json({ error: err.message });
+      } else {
+        res.status(500).json({ error: err.message });
+      }
+    }
+  });
 
   // -- Domains --
 

@@ -36,6 +36,40 @@ export interface Domain {
 }
 
 /**
+ * A submission is a proposed pattern change from an anonymous contributor.
+ * Type 'new' proposes adding a pattern to a domain/category.
+ * Type 'modify' proposes changes to an existing pattern.
+ */
+export interface Submission {
+  id: number;
+  type: "new" | "modify";
+  status: "pending" | "accepted" | "rejected";
+  targetPatternId: number | null;
+  domainSlug: string | null;
+  categorySlug: string | null;
+  label: string;
+  description: string;
+  intention: string;
+  template: string;
+  submittedAt: string;
+  reviewedAt: string | null;
+}
+
+/**
+ * Input for creating a new submission (id, status, timestamps are auto-generated).
+ */
+export interface SubmissionInput {
+  type: "new" | "modify";
+  targetPatternId?: number;
+  domainSlug?: string;
+  categorySlug?: string;
+  label: string;
+  description: string;
+  intention: string;
+  template: string;
+}
+
+/**
  * Common query interface for pattern storage backends.
  */
 export interface PatternStore {

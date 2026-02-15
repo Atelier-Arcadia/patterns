@@ -434,4 +434,236 @@ describe("SqlitePatternStore", () => {
       expect(patterns[0].label).toBe("p2");
     });
   });
+
+  // === Submissions ===
+
+  describe("addSubmission / getSubmissions / getSubmission", () => {
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+    });
+
+    it("returns empty array when no submissions exist", () => {
+      expect(store.getSubmissions()).toEqual([]);
+    });
+
+    it("creates a 'new' submission and retrieves it", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "proposed-pattern",
+        description: "A proposed pattern",
+        intention: "User wants to propose",
+        template: "# Proposed",
+      });
+
+      expect(typeof id).toBe("number");
+
+      const sub = store.getSubmission(id);
+      expect(sub).toBeDefined();
+      expect(sub!.type).toBe("new");
+      expect(sub!.status).toBe("pending");
+      expect(sub!.domainSlug).toBe("eng");
+      expect(sub!.categorySlug).toBe("features");
+      expect(sub!.targetPatternId).toBeNull();
+      expect(sub!.label).toBe("proposed-pattern");
+      expect(sub!.description).toBe("A proposed pattern");
+      expect(sub!.intention).toBe("User wants to propose");
+      expect(sub!.template).toBe("# Proposed");
+      expect(sub!.submittedAt).toBeDefined();
+      expect(sub!.reviewedAt).toBeNull();
+    });
+
+    it("creates a 'modify' submission referencing an existing pattern", () => {
+      store.addPattern("eng", "features", {
+        label: "existing",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+      const patternId = store.getPatternsWithIds("eng", ["features"])[0].id;
+
+      const id = store.addSubmission({
+        type: "modify",
+        targetPatternId: patternId,
+        label: "improved-existing",
+        description: "Better description",
+        intention: "Better intention",
+        template: "Better template",
+      });
+
+      const sub = store.getSubmission(id);
+      expect(sub!.type).toBe("modify");
+      expect(sub!.targetPatternId).toBe(patternId);
+      expect(sub!.label).toBe("improved-existing");
+    });
+
+    it("returns all submissions via getSubmissions()", () => {
+      store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+      store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "s2",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      const subs = store.getSubmissions();
+      expect(subs).toHaveLength(2);
+    });
+
+    it("filters submissions by status", () => {
+      store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      const pending = store.getSubmissions("pending");
+      expect(pending).toHaveLength(1);
+
+      const accepted = store.getSubmissions("accepted");
+      expect(accepted).toHaveLength(0);
+    });
+
+    it("returns undefined for nonexistent submission id", () => {
+      expect(store.getSubmission(99999)).toBeUndefined();
+    });
+  });
+
+  describe("reviewSubmission", () => {
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+    });
+
+    it("rejects a submission (sets status and reviewedAt)", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "rejected-one",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.reviewSubmission(id, "rejected");
+
+      const sub = store.getSubmission(id);
+      expect(sub!.status).toBe("rejected");
+      expect(sub!.reviewedAt).toBeDefined();
+      expect(sub!.reviewedAt).not.toBeNull();
+
+      // Pattern should NOT have been created
+      const patterns = store.getPatterns("eng", ["features"]);
+      expect(patterns).toHaveLength(0);
+    });
+
+    it("accepts a 'new' submission — creates the pattern", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "accepted-new",
+        description: "Accepted desc",
+        intention: "Accepted intention",
+        template: "Accepted template",
+      });
+
+      store.reviewSubmission(id, "accepted");
+
+      const sub = store.getSubmission(id);
+      expect(sub!.status).toBe("accepted");
+      expect(sub!.reviewedAt).not.toBeNull();
+
+      // Pattern should have been created
+      const patterns = store.getPatterns("eng", ["features"]);
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].label).toBe("accepted-new");
+      expect(patterns[0].description).toBe("Accepted desc");
+      expect(patterns[0].intention).toBe("Accepted intention");
+      expect(patterns[0].template).toBe("Accepted template");
+    });
+
+    it("accepts a 'modify' submission — updates the target pattern", () => {
+      store.addPattern("eng", "features", {
+        label: "original",
+        description: "Original desc",
+        intention: "Original intention",
+        template: "Original template",
+      });
+      const patternId = store.getPatternsWithIds("eng", ["features"])[0].id;
+
+      const id = store.addSubmission({
+        type: "modify",
+        targetPatternId: patternId,
+        label: "modified",
+        description: "Modified desc",
+        intention: "Modified intention",
+        template: "Modified template",
+      });
+
+      store.reviewSubmission(id, "accepted");
+
+      const sub = store.getSubmission(id);
+      expect(sub!.status).toBe("accepted");
+
+      // Pattern should have been updated
+      const patterns = store.getPatternsWithIds("eng", ["features"]);
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].label).toBe("modified");
+      expect(patterns[0].description).toBe("Modified desc");
+      expect(patterns[0].intention).toBe("Modified intention");
+      expect(patterns[0].template).toBe("Modified template");
+    });
+
+    it("throws for nonexistent submission id", () => {
+      expect(() => store.reviewSubmission(99999, "accepted")).toThrow();
+    });
+
+    it("throws when reviewing an already-reviewed submission", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.reviewSubmission(id, "rejected");
+      expect(() => store.reviewSubmission(id, "accepted")).toThrow();
+    });
+
+    it("throws when accepting a 'new' submission with invalid domain/category", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "nonexistent",
+        categorySlug: "features",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      expect(() => store.reviewSubmission(id, "accepted")).toThrow();
+    });
+  });
 });

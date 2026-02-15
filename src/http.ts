@@ -3,6 +3,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { SqlitePatternStore } from "./sqlite-store.js";
 import { createServer } from "./server.js";
 import { createApiRouter } from "./api.js";
+import { authStatus } from "./auth.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -17,6 +18,9 @@ store.initialize();
 
 const app = express();
 app.use(express.json());
+
+// Auth status middleware — sets req.isAdmin for all requests
+app.use(authStatus);
 
 // Serve the management web app
 app.use(express.static(join(__dirname, "public")));
@@ -62,4 +66,9 @@ app.all("/mcp", async (req, res) => {
 app.listen(PORT, "127.0.0.1", () => {
   console.error(`Pattern Discovery MCP Server running on http://127.0.0.1:${PORT}/mcp`);
   console.error(`Pattern Manager UI available at http://127.0.0.1:${PORT}/`);
+  if (process.env.ADMIN_SECRET) {
+    console.error("Admin access: enabled (ADMIN_SECRET is set)");
+  } else {
+    console.error("Admin access: disabled (set ADMIN_SECRET to enable)");
+  }
 });

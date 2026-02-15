@@ -16,6 +16,9 @@
       --accent-hover: #9db5ff;
       --danger: #ff6b6b;
       --danger-hover: #ff8a8a;
+      --success: #6bffb8;
+      --success-hover: #8affd0;
+      --warning: #ffcf6b;
       --radius: 8px;
     }
 
@@ -35,9 +38,12 @@
       align-items: center;
       justify-content: space-between;
       margin-bottom: 24px;
+      gap: 12px;
     }
 
     h1 { font-size: 1.5rem; font-weight: 600; }
+
+    .header-actions { display: flex; gap: 8px; align-items: center; }
 
     .breadcrumb {
       display: flex;
@@ -104,7 +110,37 @@
     button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
     button.danger { color: var(--danger); border-color: var(--danger); }
     button.danger:hover { background: var(--danger); color: #000; }
+    button.success { color: var(--success); border-color: var(--success); }
+    button.success:hover { background: var(--success); color: #000; }
     button.small { padding: 4px 10px; font-size: 0.8rem; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--danger);
+      color: #000;
+      font-size: 0.7rem;
+      font-weight: 700;
+      min-width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      padding: 0 5px;
+      margin-left: 4px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-badge.pending { background: var(--warning); color: #000; }
+    .status-badge.accepted { background: var(--success); color: #000; }
+    .status-badge.rejected { background: var(--danger); color: #000; }
 
     .form-overlay {
       position: fixed;
@@ -132,7 +168,7 @@
     .field { margin-bottom: 14px; }
     .field label { display: block; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 4px; }
 
-    .field input, .field textarea {
+    .field input, .field textarea, .field select {
       width: 100%;
       background: var(--bg);
       color: var(--text);
@@ -144,7 +180,7 @@
     }
 
     .field textarea { min-height: 120px; resize: vertical; font-family: monospace; font-size: 0.85rem; }
-    .field input:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
+    .field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: var(--accent); }
 
     .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
 
@@ -170,13 +206,39 @@
       max-height: 200px;
       overflow-y: auto;
     }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--success);
+      color: var(--success);
+      padding: 12px 20px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      z-index: 200;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    .submission-target {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Pattern Manager</h1>
-      <button class="primary" id="btn-new">+ New</button>
+      <div class="header-actions">
+        <button id="btn-submissions" style="display:none">Submissions</button>
+        <button class="primary" id="btn-new">+ New</button>
+        <button id="btn-auth"></button>
+      </div>
     </header>
     <div class="breadcrumb" id="breadcrumb"></div>
     <div class="card-list" id="content"></div>
@@ -188,6 +250,9 @@
     // State
     let currentDomain = null;
     let currentCategory = null;
+    let isAdmin = false;
+    let adminConfigured = false;
+    let viewingSubmissions = false;
 
     // -- API helper --
 
@@ -196,7 +261,17 @@
       if (body !== undefined) opts.body = JSON.stringify(body);
       const res = await fetch(API + path, opts);
       const data = await res.json().catch(() => null);
-      return { status: res.status, data };
+      return { status: res.status, data, headers: res.headers };
+    }
+
+    // -- Toast --
+
+    function showToast(msg, duration = 3000) {
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), duration);
     }
 
     // -- DOM helper --
@@ -215,11 +290,90 @@
       return e;
     }
 
+    // -- Auth --
+
+    async function checkAuth() {
+      const { data } = await api('GET', '/auth/status');
+      isAdmin = data?.authenticated || false;
+      adminConfigured = data?.adminConfigured || false;
+      updateAuthUI();
+    }
+
+    function updateAuthUI() {
+      const btnAuth = document.getElementById('btn-auth');
+      const btnNew = document.getElementById('btn-new');
+      const btnSubs = document.getElementById('btn-submissions');
+
+      if (isAdmin) {
+        btnAuth.textContent = 'Logout';
+        btnAuth.onclick = doLogout;
+        btnNew.textContent = '+ New';
+        btnNew.style.display = '';
+        btnSubs.style.display = '';
+        updateSubmissionBadge();
+      } else {
+        if (adminConfigured) {
+          btnAuth.textContent = 'Login';
+          btnAuth.onclick = showLoginForm;
+        } else {
+          btnAuth.style.display = 'none';
+        }
+        btnNew.textContent = '+ Suggest';
+        btnNew.style.display = '';
+        btnSubs.style.display = 'none';
+      }
+    }
+
+    async function updateSubmissionBadge() {
+      if (!isAdmin) return;
+      const { data } = await api('GET', '/submissions?status=pending');
+      const btn = document.getElementById('btn-submissions');
+      const count = data?.length || 0;
+      btn.innerHTML = '';
+      btn.appendChild(document.createTextNode('Submissions'));
+      if (count > 0) {
+        const badge = el('span', { className: 'badge' }, String(count));
+        btn.appendChild(badge);
+      }
+    }
+
+    function showLoginForm() {
+      showForm('Admin Login', [
+        { key: 'secret', label: 'Admin Secret', type: 'password', placeholder: 'Enter admin secret' },
+      ], async (values) => {
+        const { status, data } = await api('POST', '/auth/login', { secret: values.secret });
+        if (status === 200) {
+          await checkAuth();
+          navigateHome();
+          showToast('Logged in as admin');
+        } else {
+          showToast(data?.error || 'Login failed');
+        }
+      });
+    }
+
+    async function doLogout() {
+      await api('POST', '/auth/logout');
+      isAdmin = false;
+      viewingSubmissions = false;
+      updateAuthUI();
+      navigateHome();
+      showToast('Logged out');
+    }
+
     // -- Rendering --
 
     function renderBreadcrumb() {
       const bc = document.getElementById('breadcrumb');
       bc.innerHTML = '';
+
+      if (viewingSubmissions) {
+        const home = el('a', { onClick: () => navigateHome() }, 'Domains');
+        bc.appendChild(home);
+        bc.appendChild(el('span', { className: 'sep' }, ' / '));
+        bc.appendChild(el('span', {}, 'Submissions'));
+        return;
+      }
 
       const home = el('a', { onClick: () => navigateHome() }, 'Domains');
       bc.appendChild(home);
@@ -241,13 +395,19 @@
       content.innerHTML = '';
 
       if (domains.length === 0) {
-        content.innerHTML = '<div class="empty-state">No domains yet. Click "+ New" to create one.</div>';
+        content.innerHTML = '<div class="empty-state">No domains yet.</div>';
         return;
       }
 
       for (const d of domains) {
         const catCount = d.categories ? d.categories.length : 0;
         const patCount = d.categories ? d.categories.reduce((s, c) => s + (c.patterns?.length || 0), 0) : 0;
+
+        const actions = [];
+        if (isAdmin) {
+          actions.push(el('button', { className: 'small', onClick: (e) => { e.stopPropagation(); editDomain(d); } }, 'Edit'));
+          actions.push(el('button', { className: 'small danger', onClick: (e) => { e.stopPropagation(); deleteDomain(d.slug); } }, 'Delete'));
+        }
 
         const card = el('div', { className: 'card', onClick: () => navigateToDomain(d.slug) },
           el('div', { className: 'card-header' },
@@ -256,10 +416,7 @@
               el('div', { className: 'card-slug' }, d.slug),
               el('div', { className: 'card-desc' }, d.description),
             ),
-            el('div', { className: 'card-actions' },
-              el('button', { className: 'small', onClick: (e) => { e.stopPropagation(); editDomain(d); } }, 'Edit'),
-              el('button', { className: 'small danger', onClick: (e) => { e.stopPropagation(); deleteDomain(d.slug); } }, 'Delete'),
-            ),
+            actions.length > 0 ? el('div', { className: 'card-actions' }, ...actions) : null,
           ),
           el('div', { className: 'card-meta' },
             el('span', {}, `${catCount} categories`),
@@ -275,12 +432,18 @@
       content.innerHTML = '';
 
       if (categories.length === 0) {
-        content.innerHTML = '<div class="empty-state">No categories yet. Click "+ New" to create one.</div>';
+        content.innerHTML = '<div class="empty-state">No categories yet.</div>';
         return;
       }
 
       for (const c of categories) {
         const patCount = c.patterns?.length || 0;
+
+        const actions = [];
+        if (isAdmin) {
+          actions.push(el('button', { className: 'small', onClick: (e) => { e.stopPropagation(); editCategory(c); } }, 'Edit'));
+          actions.push(el('button', { className: 'small danger', onClick: (e) => { e.stopPropagation(); deleteCategory(c.slug); } }, 'Delete'));
+        }
 
         const card = el('div', { className: 'card', onClick: () => navigateToCategory(c.slug) },
           el('div', { className: 'card-header' },
@@ -289,10 +452,7 @@
               el('div', { className: 'card-slug' }, c.slug),
               el('div', { className: 'card-desc' }, c.description),
             ),
-            el('div', { className: 'card-actions' },
-              el('button', { className: 'small', onClick: (e) => { e.stopPropagation(); editCategory(c); } }, 'Edit'),
-              el('button', { className: 'small danger', onClick: (e) => { e.stopPropagation(); deleteCategory(c.slug); } }, 'Delete'),
-            ),
+            actions.length > 0 ? el('div', { className: 'card-actions' }, ...actions) : null,
           ),
           el('div', { className: 'card-meta' },
             el('span', {}, `${patCount} patterns`),
@@ -307,21 +467,27 @@
       content.innerHTML = '';
 
       if (patterns.length === 0) {
-        content.innerHTML = '<div class="empty-state">No patterns yet. Click "+ New" to create one.</div>';
+        content.innerHTML = '<div class="empty-state">No patterns yet.</div>';
         return;
       }
 
       for (const p of patterns) {
+        const actions = [];
+        if (isAdmin) {
+          actions.push(el('button', { className: 'small', onClick: () => editPattern(p) }, 'Edit'));
+          actions.push(el('button', { className: 'small danger', onClick: () => deletePattern(p.id) }, 'Delete'));
+        }
+        if (!isAdmin) {
+          actions.push(el('button', { className: 'small', onClick: () => suggestModifyPattern(p) }, 'Suggest Edit'));
+        }
+
         const card = el('div', { className: 'card no-click' },
           el('div', { className: 'card-header' },
             el('div', {},
               el('div', { className: 'card-title' }, p.label),
               el('div', { className: 'card-desc' }, p.description),
             ),
-            el('div', { className: 'card-actions' },
-              el('button', { className: 'small', onClick: () => editPattern(p) }, 'Edit'),
-              el('button', { className: 'small danger', onClick: () => deletePattern(p.id) }, 'Delete'),
-            ),
+            actions.length > 0 ? el('div', { className: 'card-actions' }, ...actions) : null,
           ),
           el('div', { className: 'pattern-detail' },
             el('div', { className: 'card-desc' },
@@ -335,11 +501,58 @@
       }
     }
 
+    function renderSubmissions(submissions) {
+      const content = document.getElementById('content');
+      content.innerHTML = '';
+
+      if (submissions.length === 0) {
+        content.innerHTML = '<div class="empty-state">No submissions to review.</div>';
+        return;
+      }
+
+      for (const s of submissions) {
+        const actions = [];
+        if (s.status === 'pending') {
+          actions.push(el('button', { className: 'small success', onClick: () => reviewSubmission(s.id, 'accepted') }, 'Accept'));
+          actions.push(el('button', { className: 'small danger', onClick: () => reviewSubmission(s.id, 'rejected') }, 'Reject'));
+        }
+
+        const targetInfo = s.type === 'new'
+          ? `New pattern for ${s.domainSlug} / ${s.categorySlug}`
+          : `Modify pattern #${s.targetPatternId}`;
+
+        const card = el('div', { className: 'card no-click' },
+          el('div', { className: 'card-header' },
+            el('div', {},
+              el('div', { className: 'card-title' }, s.label),
+              el('span', { className: `status-badge ${s.status}` }, s.status),
+              el('div', { className: 'submission-target' }, targetInfo),
+              el('div', { className: 'card-desc' }, s.description),
+            ),
+            actions.length > 0 ? el('div', { className: 'card-actions' }, ...actions) : null,
+          ),
+          el('div', { className: 'pattern-detail' },
+            el('div', { className: 'card-desc' },
+              el('strong', {}, 'Intention: '),
+              document.createTextNode(s.intention),
+            ),
+            el('div', { className: 'template-preview' }, s.template),
+            el('div', { className: 'card-meta' },
+              el('span', {}, `Submitted: ${new Date(s.submittedAt + 'Z').toLocaleString()}`),
+              s.reviewedAt ? el('span', {}, `Reviewed: ${new Date(s.reviewedAt + 'Z').toLocaleString()}`) : null,
+            ),
+          ),
+        );
+        content.appendChild(card);
+      }
+    }
+
     // -- Navigation --
 
     async function navigateHome() {
       currentDomain = null;
       currentCategory = null;
+      viewingSubmissions = false;
       renderBreadcrumb();
       const { data } = await api('GET', '/domains');
       renderDomains(data || []);
@@ -349,6 +562,7 @@
       const { data: domains } = await api('GET', '/domains');
       currentDomain = (domains || []).find(d => d.slug === slug) || null;
       currentCategory = null;
+      viewingSubmissions = false;
       renderBreadcrumb();
       if (currentDomain) {
         renderCategories(currentDomain.categories || []);
@@ -356,17 +570,26 @@
     }
 
     async function navigateToCategory(catSlug) {
-      // Refresh domain data (patterns include ids from the backend)
       const { data: domains } = await api('GET', '/domains');
       const freshDomain = (domains || []).find(d => d.slug === currentDomain.slug);
       if (freshDomain) currentDomain = freshDomain;
 
       currentCategory = (currentDomain.categories || []).find(c => c.slug === catSlug) || null;
+      viewingSubmissions = false;
       renderBreadcrumb();
 
       if (currentCategory) {
         renderPatterns(currentCategory.patterns || []);
       }
+    }
+
+    async function navigateToSubmissions() {
+      currentDomain = null;
+      currentCategory = null;
+      viewingSubmissions = true;
+      renderBreadcrumb();
+      const { data } = await api('GET', '/submissions');
+      renderSubmissions(data || []);
     }
 
     // -- Forms --
@@ -377,11 +600,26 @@
           el('h2', {}, title),
           ...fields.map(f => {
             const isTextarea = f.type === 'textarea';
-            const input = isTextarea
-              ? el('textarea', { id: `field-${f.key}`, placeholder: f.placeholder || '' })
-              : el('input', { id: `field-${f.key}`, type: 'text', placeholder: f.placeholder || '' });
-            if (f.value && isTextarea) input.textContent = f.value;
-            if (f.value && !isTextarea) input.value = f.value;
+            const isSelect = f.type === 'select';
+            const isPassword = f.type === 'password';
+            let input;
+
+            if (isTextarea) {
+              input = el('textarea', { id: `field-${f.key}`, placeholder: f.placeholder || '' });
+              if (f.value) input.textContent = f.value;
+            } else if (isSelect) {
+              input = el('select', { id: `field-${f.key}` },
+                ...f.options.map(o => {
+                  const opt = el('option', { value: o.value }, o.label);
+                  if (f.value === o.value) opt.selected = true;
+                  return opt;
+                })
+              );
+            } else {
+              input = el('input', { id: `field-${f.key}`, type: isPassword ? 'password' : 'text', placeholder: f.placeholder || '' });
+              if (f.value) input.value = f.value;
+            }
+
             return el('div', { className: 'field' },
               el('label', { for: `field-${f.key}` }, f.label),
               input,
@@ -402,43 +640,151 @@
       );
       document.body.appendChild(overlay);
       setTimeout(() => {
-        const first = overlay.querySelector('input, textarea');
+        const first = overlay.querySelector('input, textarea, select');
         if (first) first.focus();
       }, 50);
     }
 
-    // -- CRUD Actions --
+    // -- Suggestion forms (contributor) --
+
+    function showSuggestNewForm() {
+      showForm('Suggest New Pattern', [
+        { key: 'domainSlug', label: 'Domain', type: 'select', options: [], value: currentDomain?.slug },
+        { key: 'categorySlug', label: 'Category', type: 'select', options: [], value: currentCategory?.slug },
+        { key: 'label', label: 'Label', placeholder: 'e.g. my-pattern' },
+        { key: 'description', label: 'Description', placeholder: 'What this pattern does' },
+        { key: 'intention', label: 'Intention', placeholder: 'When the user wants to...' },
+        { key: 'template', label: 'Template', type: 'textarea', placeholder: '# Template\n\n{{variable}}' },
+      ], async (values) => {
+        const { status, data } = await api('POST', '/submissions', {
+          type: 'new',
+          domainSlug: values.domainSlug,
+          categorySlug: values.categorySlug,
+          label: values.label,
+          description: values.description,
+          intention: values.intention,
+          template: values.template,
+        });
+        if (status === 201) {
+          showToast('Suggestion submitted for review!');
+        } else {
+          showToast(data?.error || 'Submission failed');
+        }
+      });
+
+      // Populate domain/category selects after form renders
+      setTimeout(async () => {
+        const { data: domains } = await api('GET', '/domains');
+        const domainSelect = document.getElementById('field-domainSlug');
+        const catSelect = document.getElementById('field-categorySlug');
+
+        if (domainSelect && domains) {
+          domainSelect.innerHTML = '';
+          for (const d of domains) {
+            const opt = el('option', { value: d.slug }, d.name);
+            if (d.slug === currentDomain?.slug) opt.selected = true;
+            domainSelect.appendChild(opt);
+          }
+
+          const updateCategories = () => {
+            const selectedDomain = domains.find(d => d.slug === domainSelect.value);
+            catSelect.innerHTML = '';
+            if (selectedDomain) {
+              for (const c of selectedDomain.categories || []) {
+                const opt = el('option', { value: c.slug }, c.name);
+                if (c.slug === currentCategory?.slug) opt.selected = true;
+                catSelect.appendChild(opt);
+              }
+            }
+          };
+
+          domainSelect.addEventListener('change', updateCategories);
+          updateCategories();
+        }
+      }, 60);
+    }
+
+    function suggestModifyPattern(p) {
+      showForm('Suggest Edit to Pattern', [
+        { key: 'label', label: 'Label', value: p.label },
+        { key: 'description', label: 'Description', value: p.description },
+        { key: 'intention', label: 'Intention', value: p.intention },
+        { key: 'template', label: 'Template', type: 'textarea', value: p.template },
+      ], async (values) => {
+        const { status, data } = await api('POST', '/submissions', {
+          type: 'modify',
+          targetPatternId: p.id,
+          label: values.label,
+          description: values.description,
+          intention: values.intention,
+          template: values.template,
+        });
+        if (status === 201) {
+          showToast('Edit suggestion submitted for review!');
+        } else {
+          showToast(data?.error || 'Submission failed');
+        }
+      });
+    }
+
+    // -- Admin review --
+
+    async function reviewSubmission(id, decision) {
+      const label = decision === 'accepted' ? 'accept' : 'reject';
+      if (!confirm(`Are you sure you want to ${label} this submission?`)) return;
+
+      const { status, data } = await api('POST', `/submissions/${id}/review`, { decision });
+      if (status === 200) {
+        showToast(`Submission ${decision}`);
+        navigateToSubmissions();
+        updateSubmissionBadge();
+      } else {
+        showToast(data?.error || 'Review failed');
+      }
+    }
+
+    // -- CRUD Actions (admin) --
 
     document.getElementById('btn-new').addEventListener('click', () => {
-      if (!currentDomain) {
-        showForm('New Domain', [
-          { key: 'name', label: 'Name', placeholder: 'e.g. Software Engineering' },
-          { key: 'slug', label: 'Slug', placeholder: 'e.g. software-engineering' },
-          { key: 'description', label: 'Description', placeholder: 'Brief description of this domain' },
-        ], async (values) => {
-          await api('POST', '/domains', values);
-          navigateHome();
-        });
-      } else if (!currentCategory) {
-        showForm('New Category', [
-          { key: 'name', label: 'Name', placeholder: 'e.g. Features' },
-          { key: 'slug', label: 'Slug', placeholder: 'e.g. features' },
-          { key: 'description', label: 'Description', placeholder: 'Brief description of this category' },
-        ], async (values) => {
-          await api('POST', `/domains/${currentDomain.slug}/categories`, values);
-          navigateToDomain(currentDomain.slug);
-        });
+      if (isAdmin) {
+        // Admin: direct CRUD
+        if (!currentDomain && !viewingSubmissions) {
+          showForm('New Domain', [
+            { key: 'name', label: 'Name', placeholder: 'e.g. Software Engineering' },
+            { key: 'slug', label: 'Slug', placeholder: 'e.g. software-engineering' },
+            { key: 'description', label: 'Description', placeholder: 'Brief description of this domain' },
+          ], async (values) => {
+            await api('POST', '/domains', values);
+            navigateHome();
+          });
+        } else if (currentDomain && !currentCategory) {
+          showForm('New Category', [
+            { key: 'name', label: 'Name', placeholder: 'e.g. Features' },
+            { key: 'slug', label: 'Slug', placeholder: 'e.g. features' },
+            { key: 'description', label: 'Description', placeholder: 'Brief description of this category' },
+          ], async (values) => {
+            await api('POST', `/domains/${currentDomain.slug}/categories`, values);
+            navigateToDomain(currentDomain.slug);
+          });
+        } else if (currentCategory) {
+          showForm('New Pattern', [
+            { key: 'label', label: 'Label', placeholder: 'e.g. create-feature-request' },
+            { key: 'description', label: 'Description', placeholder: 'What this pattern does' },
+            { key: 'intention', label: 'Intention', placeholder: 'When the user wants to...' },
+            { key: 'template', label: 'Template', type: 'textarea', placeholder: '# Template\n\n{{variable}}' },
+          ], async (values) => {
+            await api('POST', `/domains/${currentDomain.slug}/categories/${currentCategory.slug}/patterns`, values);
+            navigateToCategory(currentCategory.slug);
+          });
+        }
       } else {
-        showForm('New Pattern', [
-          { key: 'label', label: 'Label', placeholder: 'e.g. create-feature-request' },
-          { key: 'description', label: 'Description', placeholder: 'What this pattern does' },
-          { key: 'intention', label: 'Intention', placeholder: 'When the user wants to...' },
-          { key: 'template', label: 'Template', type: 'textarea', placeholder: '# Template\n\n{{variable}}' },
-        ], async (values) => {
-          await api('POST', `/domains/${currentDomain.slug}/categories/${currentCategory.slug}/patterns`, values);
-          navigateToCategory(currentCategory.slug);
-        });
+        // Contributor: suggest
+        showSuggestNewForm();
       }
+    });
+
+    document.getElementById('btn-submissions').addEventListener('click', () => {
+      navigateToSubmissions();
     });
 
     function editDomain(d) {
@@ -492,7 +838,7 @@
     }
 
     // -- Init --
-    navigateHome();
+    checkAuth().then(() => navigateHome());
   </script>
 </body>
 </html>

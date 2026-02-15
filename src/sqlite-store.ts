@@ -1,9 +1,10 @@
 import Database from "better-sqlite3";
-import type { Domain, Category, Pattern, PatternStore, PatternWithId } from "./types.js";
+import type { Domain, Category, Pattern, PatternStore, PatternWithId, Submission, SubmissionInput } from "./types.js";
 
 /**
  * SQLite-backed pattern store with a 3-table relational schema
- * mirroring the Domain > Category > Pattern hierarchy.
+ * mirroring the Domain > Category > Pattern hierarchy,
+ * plus a submissions table for contributor proposals.
  */
 export class SqlitePatternStore implements PatternStore {
   private db: Database.Database;
@@ -44,6 +45,22 @@ export class SqlitePatternStore implements PatternStore {
         intention TEXT NOT NULL,
         template TEXT NOT NULL,
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL CHECK(type IN ('new', 'modify')),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected')),
+        target_pattern_id INTEGER,
+        domain_slug TEXT,
+        category_slug TEXT,
+        label TEXT NOT NULL,
+        description TEXT NOT NULL,
+        intention TEXT NOT NULL,
+        template TEXT NOT NULL,
+        submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+        reviewed_at TEXT,
+        FOREIGN KEY (target_pattern_id) REFERENCES patterns(id) ON DELETE SET NULL
       );
     `);
   }
@@ -363,7 +380,130 @@ export class SqlitePatternStore implements PatternStore {
     return rows;
   }
 
+  // -- Submissions --
+
+  /**
+   * Creates a new submission. Returns the submission id.
+   */
+  addSubmission(input: SubmissionInput): number {
+    const result = this.db
+      .prepare(
+        `INSERT INTO submissions (type, target_pattern_id, domain_slug, category_slug, label, description, intention, template)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        input.type,
+        input.targetPatternId ?? null,
+        input.domainSlug ?? null,
+        input.categorySlug ?? null,
+        input.label,
+        input.description,
+        input.intention,
+        input.template
+      );
+
+    return result.lastInsertRowid as number;
+  }
+
+  /**
+   * Returns submissions, optionally filtered by status.
+   */
+  getSubmissions(status?: "pending" | "accepted" | "rejected"): Submission[] {
+    if (status) {
+      return this.db
+        .prepare(
+          `SELECT id, type, status, target_pattern_id, domain_slug, category_slug,
+                  label, description, intention, template, submitted_at, reviewed_at
+           FROM submissions WHERE status = ? ORDER BY id DESC`
+        )
+        .all(status)
+        .map(this.mapSubmissionRow);
+    }
+
+    return this.db
+      .prepare(
+        `SELECT id, type, status, target_pattern_id, domain_slug, category_slug,
+                label, description, intention, template, submitted_at, reviewed_at
+         FROM submissions ORDER BY id DESC`
+      )
+      .all()
+      .map(this.mapSubmissionRow);
+  }
+
+  /**
+   * Returns a single submission by id, or undefined if not found.
+   */
+  getSubmission(id: number): Submission | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT id, type, status, target_pattern_id, domain_slug, category_slug,
+                label, description, intention, template, submitted_at, reviewed_at
+         FROM submissions WHERE id = ?`
+      )
+      .get(id);
+
+    if (!row) return undefined;
+
+    return this.mapSubmissionRow(row);
+  }
+
+  /**
+   * Reviews a submission — accepts or rejects it.
+   * Accepting a 'new' submission creates the pattern.
+   * Accepting a 'modify' submission updates the target pattern.
+   */
+  reviewSubmission(id: number, decision: "accepted" | "rejected"): void {
+    const sub = this.getSubmission(id);
+    if (!sub) {
+      throw new Error(`Submission not found: id ${id}`);
+    }
+    if (sub.status !== "pending") {
+      throw new Error(`Submission ${id} has already been reviewed (status: ${sub.status})`);
+    }
+
+    if (decision === "accepted") {
+      if (sub.type === "new") {
+        // Create the pattern in the target domain/category
+        this.addPattern(sub.domainSlug!, sub.categorySlug!, {
+          label: sub.label,
+          description: sub.description,
+          intention: sub.intention,
+          template: sub.template,
+        });
+      } else if (sub.type === "modify" && sub.targetPatternId) {
+        // Update the existing pattern
+        this.updatePattern(sub.targetPatternId, {
+          label: sub.label,
+          description: sub.description,
+          intention: sub.intention,
+          template: sub.template,
+        });
+      }
+    }
+
+    this.db
+      .prepare("UPDATE submissions SET status = ?, reviewed_at = datetime('now') WHERE id = ?")
+      .run(decision, id);
+  }
+
   // -- Private helpers --
+
+  private mapSubmissionRow(row: any): Submission {
+    return {
+      id: row.id,
+      type: row.type,
+      status: row.status,
+      targetPatternId: row.target_pattern_id,
+      domainSlug: row.domain_slug,
+      categorySlug: row.category_slug,
+      label: row.label,
+      description: row.description,
+      intention: row.intention,
+      template: row.template,
+      submittedAt: row.submitted_at,
+      reviewedAt: row.reviewed_at,
+    };
+  }
 
   private getCategoriesForDomainId(domainId: number): Category[] {
     const categoryRows = this.db
