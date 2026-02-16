@@ -8,10 +8,25 @@ interface ToolResult {
 
 /**
  * Creates a handler for the `discover` tool.
- * Given a domain slug, returns its categories.
+ * When called with a domain slug, returns its categories.
+ * When called with no domain, returns all available domains.
  */
 export function createDiscoverHandler(db: PatternStore) {
-  return async (args: { domain: string }): Promise<ToolResult> => {
+  return async (args: { domain?: string }): Promise<ToolResult> => {
+    // No domain provided — list all domains
+    if (!args.domain) {
+      const domains = db.getDomains().map((d) => ({
+        name: d.name,
+        slug: d.slug,
+        description: d.description,
+      }));
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(domains, null, 2) }],
+      };
+    }
+
+    // Domain provided — list categories within it
     const domain = db.getDomain(args.domain);
     if (!domain) {
       return {

@@ -4,6 +4,7 @@ import { createDiscoverHandler, createMatchHandler, createSuggestHandler } from 
 
 function seedTestStore(store: SqlitePatternStore): void {
   store.addDomain({ slug: "test-domain", name: "Test Domain", description: "A test domain for unit tests" });
+  store.addDomain({ slug: "another-domain", name: "Another Domain", description: "A second domain for listing tests" });
   store.addCategory("test-domain", { slug: "widgets", name: "Widgets", description: "Patterns for widget creation" });
   store.addCategory("test-domain", { slug: "gadgets", name: "Gadgets", description: "Patterns for gadget operations" });
   store.addPattern("test-domain", "widgets", {
@@ -74,6 +75,26 @@ describe("Tool Handlers", () => {
 
       const text = (result.content[0] as { type: "text"; text: string }).text;
       expect(text).toContain("nonexistent");
+    });
+
+    it("returns all domains when called with no arguments", async () => {
+      const result = await discoverHandler({});
+      expect(result.isError).toBeFalsy();
+
+      const data = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
+      expect(data).toHaveLength(2);
+      const slugs = data.map((d: any) => d.slug).sort();
+      expect(slugs).toEqual(["another-domain", "test-domain"]);
+    });
+
+    it("returns each domain with name, slug, and description when no arguments given", async () => {
+      const result = await discoverHandler({});
+      const data = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
+      const testDomain = data.find((d: any) => d.slug === "test-domain");
+
+      expect(testDomain.name).toBe("Test Domain");
+      expect(testDomain.slug).toBe("test-domain");
+      expect(testDomain.description).toBe("A test domain for unit tests");
     });
   });
 

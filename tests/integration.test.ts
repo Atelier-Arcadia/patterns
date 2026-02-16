@@ -6,6 +6,7 @@ import { SqlitePatternStore } from "../src/sqlite-store.js";
 
 function seedTestStore(store: SqlitePatternStore): void {
   store.addDomain({ slug: "test-domain", name: "Test Domain", description: "A test domain for unit tests" });
+  store.addDomain({ slug: "another-domain", name: "Another Domain", description: "A second domain for listing tests" });
   store.addCategory("test-domain", { slug: "widgets", name: "Widgets", description: "Patterns for widget creation" });
   store.addCategory("test-domain", { slug: "gadgets", name: "Gadgets", description: "Patterns for gadget operations" });
   store.addPattern("test-domain", "widgets", {
@@ -57,7 +58,7 @@ describe("MCP Integration", () => {
     expect(toolNames).toEqual(["discover", "match", "suggest"]);
   });
 
-  it("discover tool returns categories", async () => {
+  it("discover tool returns categories for a given domain", async () => {
     const result = await client.callTool({
       name: "discover",
       arguments: { domain: "test-domain" },
@@ -66,6 +67,28 @@ describe("MCP Integration", () => {
     expect(result.isError).toBeFalsy();
     const data = JSON.parse((result.content as any)[0].text);
     expect(data).toHaveLength(2);
+  });
+
+  it("discover tool returns all domains when called with no arguments", async () => {
+    const result = await client.callTool({
+      name: "discover",
+      arguments: {},
+    });
+
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse((result.content as any)[0].text);
+    expect(data).toHaveLength(2);
+    const slugs = data.map((d: any) => d.slug).sort();
+    expect(slugs).toEqual(["another-domain", "test-domain"]);
+  });
+
+  it("discover tool schema marks domain as optional", async () => {
+    const result = await client.listTools();
+    const discoverTool = result.tools.find((t) => t.name === "discover");
+    expect(discoverTool).toBeDefined();
+    // domain should not be in the required array
+    const required = (discoverTool!.inputSchema as any).required || [];
+    expect(required).not.toContain("domain");
   });
 
   it("match tool returns patterns", async () => {
@@ -80,19 +103,28 @@ describe("MCP Integration", () => {
     expect(data[0].label).toBe("create-widget");
   });
 
-  it("end-to-end: discover then match", async () => {
-    // Step 1: Discover categories
-    const discoverResult = await client.callTool({
+  it("end-to-end: discover domains then discover categories then match", async () => {
+    // Step 1: Discover all domains
+    const domainsResult = await client.callTool({
       name: "discover",
-      arguments: { domain: "test-domain" },
+      arguments: {},
     });
-    const categories = JSON.parse((discoverResult.content as any)[0].text);
+    const domains = JSON.parse((domainsResult.content as any)[0].text);
+    const testDomain = domains.find((d: any) => d.slug === "test-domain");
+    expect(testDomain).toBeDefined();
+
+    // Step 2: Discover categories for the domain
+    const categoriesResult = await client.callTool({
+      name: "discover",
+      arguments: { domain: testDomain.slug },
+    });
+    const categories = JSON.parse((categoriesResult.content as any)[0].text);
     const categorySlugs = categories.map((c: any) => c.slug);
 
-    // Step 2: Match patterns using discovered categories
+    // Step 3: Match patterns using discovered categories
     const matchResult = await client.callTool({
       name: "match",
-      arguments: { domain: "test-domain", categories: categorySlugs },
+      arguments: { domain: testDomain.slug, categories: categorySlugs },
     });
     const patterns = JSON.parse((matchResult.content as any)[0].text);
 

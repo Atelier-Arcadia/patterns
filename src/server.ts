@@ -18,8 +18,8 @@ export function createServer(db: PatternStore & SubmissionStore): McpServer {
 
   server.tool(
     "discover",
-    "Given a domain, returns the list of known categories within that domain. Use this to explore what patterns are available before matching.",
-    { domain: z.string().describe("The domain slug to discover categories for (e.g. 'software-engineering')") },
+    "Explore the pattern hierarchy. With no arguments, returns all available domains. With a domain slug, returns the categories within that domain.",
+    { domain: z.string().optional().describe("The domain slug to discover categories for (e.g. 'software-engineering'). Omit to list all domains.") },
     async (args) => discoverHandler(args)
   );
 
