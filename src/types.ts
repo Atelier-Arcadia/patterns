@@ -85,6 +85,14 @@ export interface PatternStore {
  * Extended store interface that includes submission capabilities.
  * Used by MCP tools that need to create suggestions.
  */
+/**
+ * Describes what new entities would be created if a submission were approved.
+ */
+export interface SubmissionImpact {
+  newDomain: { slug: string; name: string } | null;
+  newCategory: { slug: string; name: string } | null;
+}
+
 export interface SubmissionStore {
   addSubmission(input: SubmissionInput): number;
   getSubmission(id: number): Submission | undefined;

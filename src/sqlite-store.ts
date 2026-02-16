@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import type { Domain, Category, Pattern, PatternStore, PatternWithId, Submission, SubmissionInput, SubmissionStore } from "./types.js";
+import type { Domain, Category, Pattern, PatternStore, PatternWithId, Submission, SubmissionInput, SubmissionImpact, SubmissionStore } from "./types.js";
 
 /**
  * SQLite-backed pattern store with a 3-table relational schema
@@ -471,13 +471,18 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
 
     if (decision === "accepted") {
       if (sub.type === "new") {
-        // Create the pattern in the target domain/category
-        this.addPattern(sub.domainSlug!, sub.categorySlug!, {
-          label: sub.label,
-          description: sub.description,
-          intention: sub.intention,
-          template: sub.template,
+        // Auto-create domain and category if they don't exist, then create the pattern
+        const doAccept = this.db.transaction(() => {
+          this.ensureDomainExists(sub.domainSlug!);
+          this.ensureCategoryExists(sub.domainSlug!, sub.categorySlug!);
+          this.addPattern(sub.domainSlug!, sub.categorySlug!, {
+            label: sub.label,
+            description: sub.description,
+            intention: sub.intention,
+            template: sub.template,
+          });
         });
+        doAccept();
       } else if (sub.type === "modify" && sub.targetPatternId) {
         // Update the existing pattern
         this.updatePattern(sub.targetPatternId, {
@@ -494,7 +499,53 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
       .run(decision, id);
   }
 
+  /**
+   * Returns what new entities would be created if this submission were approved.
+   */
+  getSubmissionImpact(id: number): SubmissionImpact {
+    const sub = this.getSubmission(id);
+    const none: SubmissionImpact = { newDomain: null, newCategory: null };
+    if (!sub || sub.type !== "new" || sub.status !== "pending") return none;
+
+    const domainExists = !!this.db
+      .prepare("SELECT id FROM domains WHERE slug = ?")
+      .get(sub.domainSlug!);
+
+    let categoryExists = false;
+    if (domainExists) {
+      const domain = this.db.prepare("SELECT id FROM domains WHERE slug = ?").get(sub.domainSlug!) as { id: number };
+      categoryExists = !!this.db
+        .prepare("SELECT id FROM categories WHERE domain_id = ? AND slug = ?")
+        .get(domain.id, sub.categorySlug!);
+    }
+
+    return {
+      newDomain: domainExists ? null : { slug: sub.domainSlug!, name: this.slugToName(sub.domainSlug!) },
+      newCategory: categoryExists ? null : { slug: sub.categorySlug!, name: this.slugToName(sub.categorySlug!) },
+    };
+  }
+
   // -- Private helpers --
+
+  private slugToName(slug: string): string {
+    return slug.split("-").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
+  }
+
+  private ensureDomainExists(slug: string): void {
+    const exists = this.db.prepare("SELECT id FROM domains WHERE slug = ?").get(slug);
+    if (!exists) {
+      this.addDomain({ slug, name: this.slugToName(slug), description: "Auto-created domain" });
+    }
+  }
+
+  private ensureCategoryExists(domainSlug: string, categorySlug: string): void {
+    const domain = this.db.prepare("SELECT id FROM domains WHERE slug = ?").get(domainSlug) as { id: number } | undefined;
+    if (!domain) return; // ensureDomainExists should be called first
+    const exists = this.db.prepare("SELECT id FROM categories WHERE domain_id = ? AND slug = ?").get(domain.id, categorySlug);
+    if (!exists) {
+      this.addCategory(domainSlug, { slug: categorySlug, name: this.slugToName(categorySlug), description: "Auto-created category" });
+    }
+  }
 
   private mapSubmissionRow(row: any): Submission {
     return {

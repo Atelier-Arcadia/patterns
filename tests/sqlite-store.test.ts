@@ -684,10 +684,149 @@ describe("SqlitePatternStore", () => {
       expect(() => store.reviewSubmission(id, "accepted")).toThrow();
     });
 
-    it("throws when accepting a 'new' submission with invalid domain/category", () => {
+    it("auto-creates domain and category when accepting a 'new' submission with nonexistent domain", () => {
       const id = store.addSubmission({
         type: "new",
-        domainSlug: "nonexistent",
+        domainSlug: "new-domain",
+        categorySlug: "new-cat",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.reviewSubmission(id, "accepted");
+
+      const sub = store.getSubmission(id);
+      expect(sub!.status).toBe("accepted");
+
+      const domain = store.getDomain("new-domain");
+      expect(domain).toBeDefined();
+      expect(domain!.name).toBe("New Domain");
+      expect(domain!.description).toBe("Auto-created domain");
+
+      const categories = store.getCategories("new-domain");
+      expect(categories).toHaveLength(1);
+      expect(categories[0].slug).toBe("new-cat");
+      expect(categories[0].name).toBe("New Cat");
+      expect(categories[0].description).toBe("Auto-created category");
+
+      const patterns = store.getPatterns("new-domain", ["new-cat"]);
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].label).toBe("s1");
+    });
+
+    it("auto-creates only category when domain exists but category does not", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "new-cat",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.reviewSubmission(id, "accepted");
+
+      const categories = store.getCategories("eng");
+      expect(categories).toHaveLength(2); // "features" from beforeEach + "new-cat"
+      const newCat = categories.find((c) => c.slug === "new-cat");
+      expect(newCat).toBeDefined();
+      expect(newCat!.name).toBe("New Cat");
+
+      const patterns = store.getPatterns("eng", ["new-cat"]);
+      expect(patterns).toHaveLength(1);
+    });
+
+    it("auto-creates both domain and category when both are nonexistent", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "design",
+        categorySlug: "ui-patterns",
+        label: "button-states",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.reviewSubmission(id, "accepted");
+
+      const domain = store.getDomain("design");
+      expect(domain).toBeDefined();
+      expect(domain!.name).toBe("Design");
+
+      const categories = store.getCategories("design");
+      expect(categories).toHaveLength(1);
+      expect(categories[0].slug).toBe("ui-patterns");
+      expect(categories[0].name).toBe("Ui Patterns");
+
+      const patterns = store.getPatterns("design", ["ui-patterns"]);
+      expect(patterns).toHaveLength(1);
+    });
+
+    it("does not auto-create when rejecting a submission with nonexistent domain", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "should-not-exist",
+        categorySlug: "should-not-exist",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.reviewSubmission(id, "rejected");
+
+      expect(store.getDomain("should-not-exist")).toBeUndefined();
+    });
+
+    it("uses title-cased slug as name for auto-created domain", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "my-cool-domain",
+        categorySlug: "some-cat",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.reviewSubmission(id, "accepted");
+
+      const domain = store.getDomain("my-cool-domain");
+      expect(domain!.name).toBe("My Cool Domain");
+    });
+
+    it("uses title-cased slug as name for auto-created category", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "my-cool-category",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.reviewSubmission(id, "accepted");
+
+      const categories = store.getCategories("eng");
+      const newCat = categories.find((c) => c.slug === "my-cool-category");
+      expect(newCat!.name).toBe("My Cool Category");
+    });
+  });
+
+  describe("getSubmissionImpact", () => {
+    beforeEach(() => {
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+    });
+
+    it("returns null impacts when domain and category both exist", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
         categorySlug: "features",
         label: "s1",
         description: "d",
@@ -695,7 +834,82 @@ describe("SqlitePatternStore", () => {
         template: "t",
       });
 
-      expect(() => store.reviewSubmission(id, "accepted")).toThrow();
+      const impact = store.getSubmissionImpact(id);
+      expect(impact.newDomain).toBeNull();
+      expect(impact.newCategory).toBeNull();
+    });
+
+    it("returns newDomain and newCategory when domain does not exist", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "new-domain",
+        categorySlug: "new-cat",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      const impact = store.getSubmissionImpact(id);
+      expect(impact.newDomain).toEqual({ slug: "new-domain", name: "New Domain" });
+      expect(impact.newCategory).toEqual({ slug: "new-cat", name: "New Cat" });
+    });
+
+    it("returns only newCategory when domain exists but category does not", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "new-cat",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      const impact = store.getSubmissionImpact(id);
+      expect(impact.newDomain).toBeNull();
+      expect(impact.newCategory).toEqual({ slug: "new-cat", name: "New Cat" });
+    });
+
+    it("returns null impacts for modify submissions", () => {
+      store.addPattern("eng", "features", {
+        label: "p1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+      const patternId = store.getPatternsWithIds("eng", ["features"])[0].id;
+
+      const id = store.addSubmission({
+        type: "modify",
+        targetPatternId: patternId,
+        label: "improved",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      const impact = store.getSubmissionImpact(id);
+      expect(impact.newDomain).toBeNull();
+      expect(impact.newCategory).toBeNull();
+    });
+
+    it("returns null impacts for already-reviewed submissions", () => {
+      const id = store.addSubmission({
+        type: "new",
+        domainSlug: "new-domain",
+        categorySlug: "new-cat",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      store.reviewSubmission(id, "rejected");
+
+      const impact = store.getSubmissionImpact(id);
+      expect(impact.newDomain).toBeNull();
+      expect(impact.newCategory).toBeNull();
     });
   });
 });

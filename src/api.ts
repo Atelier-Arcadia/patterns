@@ -3,6 +3,13 @@ import type { SqlitePatternStore } from "./sqlite-store.js";
 import { login, logout, isAdminConfigured, parseCookie, requireAdmin } from "./auth.js";
 
 /**
+ * Helper to extract a single string from req.params, since Express types them as string | string[]
+ */
+function getParam(value: string | string[]): string {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/**
  * Creates an Express router with REST endpoints for managing
  * the Domain > Category > Pattern hierarchy, plus auth and submissions.
  */
@@ -82,11 +89,15 @@ export function createApiRouter(store: SqlitePatternStore): Router {
   router.get("/submissions", requireAdmin, (req, res) => {
     const status = req.query.status as "pending" | "accepted" | "rejected" | undefined;
     const submissions = store.getSubmissions(status);
-    res.json(submissions);
+    const enriched = submissions.map(s => ({
+      ...s,
+      impact: s.status === "pending" && s.type === "new" ? store.getSubmissionImpact(s.id) : null,
+    }));
+    res.json(enriched);
   });
 
   router.post("/submissions/:id/review", requireAdmin, (req, res) => {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(getParam(req.params.id), 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid submission id" });
       return;
@@ -141,8 +152,8 @@ export function createApiRouter(store: SqlitePatternStore): Router {
   router.put("/domains/:slug", (req, res) => {
     const { name, description } = req.body ?? {};
     try {
-      store.updateDomain(req.params.slug, { name, description });
-      const domain = store.getDomain(req.params.slug);
+      store.updateDomain(getParam(req.params.slug), { name, description });
+      const domain = store.getDomain(getParam(req.params.slug));
       res.json(domain);
     } catch (err: any) {
       if (err.message?.includes("not found")) {
@@ -155,7 +166,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
 
   router.delete("/domains/:slug", (req, res) => {
     try {
-      store.deleteDomain(req.params.slug);
+      store.deleteDomain(getParam(req.params.slug));
       res.json({ ok: true });
     } catch (err: any) {
       if (err.message?.includes("not found")) {
@@ -176,7 +187,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
     }
 
     try {
-      store.addCategory(req.params.slug, { slug: catSlug, name, description });
+      store.addCategory(getParam(req.params.slug), { slug: catSlug, name, description });
       res.status(201).json({ slug: catSlug, name, description });
     } catch (err: any) {
       if (err.message?.includes("not found")) {
@@ -190,9 +201,9 @@ export function createApiRouter(store: SqlitePatternStore): Router {
   router.put("/domains/:slug/categories/:catSlug", (req, res) => {
     const { name, description } = req.body ?? {};
     try {
-      store.updateCategory(req.params.slug, req.params.catSlug, { name, description });
-      const categories = store.getCategories(req.params.slug);
-      const updated = categories.find((c) => c.slug === req.params.catSlug);
+      store.updateCategory(getParam(req.params.slug), getParam(req.params.catSlug), { name, description });
+      const categories = store.getCategories(getParam(req.params.slug));
+      const updated = categories.find((c) => c.slug === getParam(req.params.catSlug));
       res.json(updated);
     } catch (err: any) {
       if (err.message?.includes("not found")) {
@@ -205,7 +216,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
 
   router.delete("/domains/:slug/categories/:catSlug", (req, res) => {
     try {
-      store.deleteCategory(req.params.slug, req.params.catSlug);
+      store.deleteCategory(getParam(req.params.slug), getParam(req.params.catSlug));
       res.json({ ok: true });
     } catch (err: any) {
       if (err.message?.includes("not found")) {
@@ -228,7 +239,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
     }
 
     try {
-      store.addPattern(req.params.slug, req.params.catSlug, {
+      store.addPattern(getParam(req.params.slug), getParam(req.params.catSlug), {
         label,
         description,
         intention,
@@ -245,7 +256,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
   });
 
   router.put("/patterns/:id", (req, res) => {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(getParam(req.params.id), 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid pattern id" });
       return;
@@ -265,7 +276,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
   });
 
   router.delete("/patterns/:id", (req, res) => {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(getParam(req.params.id), 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid pattern id" });
       return;

@@ -142,6 +142,16 @@
     .status-badge.accepted { background: var(--success); color: #000; }
     .status-badge.rejected { background: var(--danger); color: #000; }
 
+    .impact-warning {
+      background: rgba(255, 207, 107, 0.15);
+      border: 1px solid var(--warning);
+      color: var(--warning);
+      padding: 6px 10px;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      margin-top: 6px;
+    }
+
     .form-overlay {
       position: fixed;
       inset: 0;
@@ -253,6 +263,7 @@
     let isAdmin = false;
     let adminConfigured = false;
     let viewingSubmissions = false;
+    let currentSubmissions = [];
 
     // -- API helper --
 
@@ -521,12 +532,21 @@
           ? `New pattern for ${s.domainSlug} / ${s.categorySlug}`
           : `Modify pattern #${s.targetPatternId}`;
 
+        const impactWarnings = [];
+        if (s.impact?.newDomain) {
+          impactWarnings.push(el('div', { className: 'impact-warning' }, `Will create new domain: ${s.impact.newDomain.name} (${s.impact.newDomain.slug})`));
+        }
+        if (s.impact?.newCategory) {
+          impactWarnings.push(el('div', { className: 'impact-warning' }, `Will create new category: ${s.impact.newCategory.name} (${s.impact.newCategory.slug})`));
+        }
+
         const card = el('div', { className: 'card no-click' },
           el('div', { className: 'card-header' },
             el('div', {},
               el('div', { className: 'card-title' }, s.label),
               el('span', { className: `status-badge ${s.status}` }, s.status),
               el('div', { className: 'submission-target' }, targetInfo),
+              ...impactWarnings,
               el('div', { className: 'card-desc' }, s.description),
             ),
             actions.length > 0 ? el('div', { className: 'card-actions' }, ...actions) : null,
@@ -589,7 +609,8 @@
       viewingSubmissions = true;
       renderBreadcrumb();
       const { data } = await api('GET', '/submissions');
-      renderSubmissions(data || []);
+      currentSubmissions = data || [];
+      renderSubmissions(currentSubmissions);
     }
 
     // -- Forms --
@@ -731,7 +752,17 @@
 
     async function reviewSubmission(id, decision) {
       const label = decision === 'accepted' ? 'accept' : 'reject';
-      if (!confirm(`Are you sure you want to ${label} this submission?`)) return;
+      let msg = `Are you sure you want to ${label} this submission?`;
+      if (decision === 'accepted') {
+        const sub = currentSubmissions.find(s => s.id === id);
+        if (sub?.impact?.newDomain || sub?.impact?.newCategory) {
+          const parts = [];
+          if (sub.impact.newDomain) parts.push(`new domain "${sub.impact.newDomain.name}"`);
+          if (sub.impact.newCategory) parts.push(`new category "${sub.impact.newCategory.name}"`);
+          msg = `This will create ${parts.join(' and ')}.\n\n${msg}`;
+        }
+      }
+      if (!confirm(msg)) return;
 
       const { status, data } = await api('POST', `/submissions/${id}/review`, { decision });
       if (status === 200) {

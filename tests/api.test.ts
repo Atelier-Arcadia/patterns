@@ -561,5 +561,109 @@ describe("API Router", () => {
       const patterns = store.getPatterns("eng", ["features"]);
       expect(patterns.some((p) => p.label === "rejected-pattern")).toBe(false);
     });
+
+    it("auto-creates domain and category when accepting submission with nonexistent domain", async () => {
+      process.env.ADMIN_SECRET = "secret";
+
+      const subId = store.addSubmission({
+        type: "new",
+        domainSlug: "brand-new",
+        categorySlug: "brand-cat",
+        label: "auto-created-pattern",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      const loginRes = await req(app, "POST", "/api/auth/login", { secret: "secret" });
+      const setCookie = loginRes.headers.get("set-cookie")!;
+      const token = setCookie.split("session=")[1].split(";")[0];
+
+      const res = await req(app, "POST", `/api/submissions/${subId}/review`, { decision: "accepted" }, {
+        Cookie: `session=${token}`,
+      });
+      expect(res.status).toBe(200);
+
+      // Domain and category should have been auto-created
+      const domain = store.getDomain("brand-new");
+      expect(domain).toBeDefined();
+      expect(domain!.name).toBe("Brand New");
+
+      const categories = store.getCategories("brand-new");
+      expect(categories).toHaveLength(1);
+      expect(categories[0].slug).toBe("brand-cat");
+
+      // Pattern should have been created
+      const patterns = store.getPatterns("brand-new", ["brand-cat"]);
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].label).toBe("auto-created-pattern");
+    });
+  });
+
+  describe("GET /api/submissions impact enrichment", () => {
+    afterEach(() => {
+      clearSessions();
+      delete process.env.ADMIN_SECRET;
+    });
+
+    it("returns impact data for pending submission with nonexistent domain", async () => {
+      process.env.ADMIN_SECRET = "secret";
+
+      store.addSubmission({
+        type: "new",
+        domainSlug: "unknown-domain",
+        categorySlug: "unknown-cat",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      const loginRes = await req(app, "POST", "/api/auth/login", { secret: "secret" });
+      const setCookie = loginRes.headers.get("set-cookie")!;
+      const token = setCookie.split("session=")[1].split(";")[0];
+
+      const res = await req(app, "GET", "/api/submissions", undefined, {
+        Cookie: `session=${token}`,
+      });
+      expect(res.status).toBe(200);
+
+      const sub = res.body.find((s: any) => s.domainSlug === "unknown-domain");
+      expect(sub).toBeDefined();
+      expect(sub.impact).toBeDefined();
+      expect(sub.impact.newDomain).toEqual({ slug: "unknown-domain", name: "Unknown Domain" });
+      expect(sub.impact.newCategory).toEqual({ slug: "unknown-cat", name: "Unknown Cat" });
+    });
+
+    it("returns null impact for submission with existing domain and category", async () => {
+      process.env.ADMIN_SECRET = "secret";
+
+      store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
+
+      store.addSubmission({
+        type: "new",
+        domainSlug: "eng",
+        categorySlug: "features",
+        label: "s1",
+        description: "d",
+        intention: "i",
+        template: "t",
+      });
+
+      const loginRes = await req(app, "POST", "/api/auth/login", { secret: "secret" });
+      const setCookie = loginRes.headers.get("set-cookie")!;
+      const token = setCookie.split("session=")[1].split(";")[0];
+
+      const res = await req(app, "GET", "/api/submissions", undefined, {
+        Cookie: `session=${token}`,
+      });
+      expect(res.status).toBe(200);
+
+      const sub = res.body.find((s: any) => s.domainSlug === "eng");
+      expect(sub).toBeDefined();
+      expect(sub.impact.newDomain).toBeNull();
+      expect(sub.impact.newCategory).toBeNull();
+    });
   });
 });
