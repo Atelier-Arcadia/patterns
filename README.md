@@ -12,14 +12,14 @@ npm install
 
 ### As an MCP server (stdio)
 
-The most common way to use this. Add it to your MCP client config (e.g. Claude Code, Claude Desktop):
+The most common way to use this. Clone the repository and then add it to your MCP client config (e.g. Claude Code, Claude Desktop):
 
 ```json
 {
   "mcpServers": {
     "patterns": {
       "command": "npx",
-      "args": ["tsx", "src/stdio.ts"]
+      "args": ["tsx", "path/to/src/stdio.ts"]
     }
   }
 }
