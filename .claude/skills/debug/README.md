@@ -1,6 +1,6 @@
-# Pattern Discovery Debug Skills
+# Grimoire Debug Skills
 
-Skills for verifying the pattern-discovery MCP server during Stage 4 (debugging).
+Skills for verifying the grimoire-mcp MCP server during Stage 4 (debugging).
 
 ## Skills
 

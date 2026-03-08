@@ -1,12 +1,12 @@
 import Database from "better-sqlite3";
-import type { Domain, Category, Pattern, PatternStore, PatternWithId, Submission, SubmissionInput, SubmissionImpact, SubmissionStore } from "./types.js";
+import type { Domain, Category, Spell, Grimoire, SpellWithId, Submission, SubmissionInput, SubmissionImpact, SubmissionStore } from "./types.js";
 
 /**
- * SQLite-backed pattern store with a 3-table relational schema
- * mirroring the Domain > Category > Pattern hierarchy,
+ * SQLite-backed spell store with a 3-table relational schema
+ * mirroring the Domain > Category > Spell hierarchy,
  * plus a submissions table for contributor proposals.
  */
-export class SqlitePatternStore implements PatternStore, SubmissionStore {
+export class SqliteGrimoire implements Grimoire, SubmissionStore {
   private db: Database.Database;
 
   constructor(dbPath: string) {
@@ -37,7 +37,7 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
         UNIQUE(domain_id, slug)
       );
 
-      CREATE TABLE IF NOT EXISTS patterns (
+      CREATE TABLE IF NOT EXISTS grimoire (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category_id INTEGER NOT NULL,
         label TEXT NOT NULL,
@@ -51,7 +51,7 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         type TEXT NOT NULL CHECK(type IN ('new', 'modify')),
         status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected')),
-        target_pattern_id INTEGER,
+        target_spell_id INTEGER,
         domain_slug TEXT,
         category_slug TEXT,
         label TEXT NOT NULL,
@@ -61,7 +61,7 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
         source TEXT,
         submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
         reviewed_at TEXT,
-        FOREIGN KEY (target_pattern_id) REFERENCES patterns(id) ON DELETE SET NULL
+        FOREIGN KEY (target_spell_id) REFERENCES grimoire(id) ON DELETE SET NULL
       );
     `);
 
@@ -113,9 +113,9 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
   }
 
   /**
-   * Adds a pattern to a category within a domain.
+   * Adds a spell to a category within a domain.
    */
-  addPattern(domainSlug: string, categorySlug: string, pattern: Pattern): void {
+  addSpell(domainSlug: string, categorySlug: string, spell: Spell): void {
     const row = this.db
       .prepare(
         `SELECT c.id FROM categories c
@@ -132,9 +132,9 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
 
     this.db
       .prepare(
-        "INSERT INTO patterns (category_id, label, description, intention, template) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO grimoire (category_id, label, description, intention, template) VALUES (?, ?, ?, ?, ?)"
       )
-      .run(row.id, pattern.label, pattern.description, pattern.intention, pattern.template);
+      .run(row.id, spell.label, spell.description, spell.intention, spell.template);
   }
 
   // -- Update methods --
@@ -210,9 +210,9 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
   }
 
   /**
-   * Updates a pattern by id.
+   * Updates a spell by id.
    */
-  updatePattern(
+  updateSpell(
     id: number,
     changes: { label?: string; description?: string; intention?: string; template?: string }
   ): void {
@@ -240,18 +240,18 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
 
     values.push(id);
     const result = this.db
-      .prepare(`UPDATE patterns SET ${setClauses.join(", ")} WHERE id = ?`)
+      .prepare(`UPDATE grimoire SET ${setClauses.join(", ")} WHERE id = ?`)
       .run(...values);
 
     if (result.changes === 0) {
-      throw new Error(`Pattern not found: id ${id}`);
+      throw new Error(`Spell not found: id ${id}`);
     }
   }
 
   // -- Delete methods --
 
   /**
-   * Deletes a domain and all its categories and patterns (via CASCADE).
+   * Deletes a domain and all its categories and spells (via CASCADE).
    */
   deleteDomain(slug: string): void {
     const result = this.db
@@ -264,7 +264,7 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
   }
 
   /**
-   * Deletes a category and all its patterns (via CASCADE).
+   * Deletes a category and all its spells (via CASCADE).
    */
   deleteCategory(domainSlug: string, categorySlug: string): void {
     const row = this.db
@@ -285,19 +285,19 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
   }
 
   /**
-   * Deletes a single pattern by id.
+   * Deletes a single spell by id.
    */
-  deletePattern(id: number): void {
+  deleteSpell(id: number): void {
     const result = this.db
-      .prepare("DELETE FROM patterns WHERE id = ?")
+      .prepare("DELETE FROM grimoire WHERE id = ?")
       .run(id);
 
     if (result.changes === 0) {
-      throw new Error(`Pattern not found: id ${id}`);
+      throw new Error(`Spell not found: id ${id}`);
     }
   }
 
-  // -- PatternStore interface (read) --
+  // -- Grimoire interface (read) --
 
   getDomains(): Domain[] {
     const domainRows = this.db
@@ -337,7 +337,7 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
     return this.getCategoriesForDomainId(domain.id);
   }
 
-  getPatterns(domainSlug: string, categorySlugs: string[]): Pattern[] {
+  getSpells(domainSlug: string, categorySlugs: string[]): Spell[] {
     if (categorySlugs.length === 0) return [];
 
     const domain = this.db
@@ -350,21 +350,21 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
     const rows = this.db
       .prepare(
         `SELECT p.label, p.description, p.intention, p.template
-         FROM patterns p
+         FROM grimoire p
          JOIN categories c ON p.category_id = c.id
          WHERE c.domain_id = ? AND c.slug IN (${placeholders})
          ORDER BY c.slug, p.id`
       )
-      .all(domain.id, ...categorySlugs) as Pattern[];
+      .all(domain.id, ...categorySlugs) as Spell[];
 
     return rows;
   }
 
   /**
-   * Like getPatterns but includes the database id for each pattern.
+   * Like getSpells but includes the database id for each spell.
    * Used by the management API for update/delete operations.
    */
-  getPatternsWithIds(domainSlug: string, categorySlugs: string[]): PatternWithId[] {
+  getSpellsWithIds(domainSlug: string, categorySlugs: string[]): SpellWithId[] {
     if (categorySlugs.length === 0) return [];
 
     const domain = this.db
@@ -377,12 +377,12 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
     const rows = this.db
       .prepare(
         `SELECT p.id, p.label, p.description, p.intention, p.template
-         FROM patterns p
+         FROM grimoire p
          JOIN categories c ON p.category_id = c.id
          WHERE c.domain_id = ? AND c.slug IN (${placeholders})
          ORDER BY c.slug, p.id`
       )
-      .all(domain.id, ...categorySlugs) as PatternWithId[];
+      .all(domain.id, ...categorySlugs) as SpellWithId[];
 
     return rows;
   }
@@ -395,12 +395,12 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
   addSubmission(input: SubmissionInput): number {
     const result = this.db
       .prepare(
-        `INSERT INTO submissions (type, target_pattern_id, domain_slug, category_slug, label, description, intention, template, source)
+        `INSERT INTO submissions (type, target_spell_id, domain_slug, category_slug, label, description, intention, template, source)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.type,
-        input.targetPatternId ?? null,
+        input.targetSpellId ?? null,
         input.domainSlug ?? null,
         input.categorySlug ?? null,
         input.label,
@@ -420,7 +420,7 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
     if (status) {
       return this.db
         .prepare(
-          `SELECT id, type, status, target_pattern_id, domain_slug, category_slug,
+          `SELECT id, type, status, target_spell_id, domain_slug, category_slug,
                   label, description, intention, template, source, submitted_at, reviewed_at
            FROM submissions WHERE status = ? ORDER BY id DESC`
         )
@@ -430,7 +430,7 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
 
     return this.db
       .prepare(
-        `SELECT id, type, status, target_pattern_id, domain_slug, category_slug,
+        `SELECT id, type, status, target_spell_id, domain_slug, category_slug,
                 label, description, intention, template, source, submitted_at, reviewed_at
          FROM submissions ORDER BY id DESC`
       )
@@ -444,7 +444,7 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
   getSubmission(id: number): Submission | undefined {
     const row = this.db
       .prepare(
-        `SELECT id, type, status, target_pattern_id, domain_slug, category_slug,
+        `SELECT id, type, status, target_spell_id, domain_slug, category_slug,
                 label, description, intention, template, source, submitted_at, reviewed_at
          FROM submissions WHERE id = ?`
       )
@@ -457,8 +457,8 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
 
   /**
    * Reviews a submission — accepts or rejects it.
-   * Accepting a 'new' submission creates the pattern.
-   * Accepting a 'modify' submission updates the target pattern.
+   * Accepting a 'new' submission creates the spell.
+   * Accepting a 'modify' submission updates the target spell.
    */
   reviewSubmission(id: number, decision: "accepted" | "rejected"): void {
     const sub = this.getSubmission(id);
@@ -471,11 +471,11 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
 
     if (decision === "accepted") {
       if (sub.type === "new") {
-        // Auto-create domain and category if they don't exist, then create the pattern
+        // Auto-create domain and category if they don't exist, then create the spell
         const doAccept = this.db.transaction(() => {
           this.ensureDomainExists(sub.domainSlug!);
           this.ensureCategoryExists(sub.domainSlug!, sub.categorySlug!);
-          this.addPattern(sub.domainSlug!, sub.categorySlug!, {
+          this.addSpell(sub.domainSlug!, sub.categorySlug!, {
             label: sub.label,
             description: sub.description,
             intention: sub.intention,
@@ -483,9 +483,9 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
           });
         });
         doAccept();
-      } else if (sub.type === "modify" && sub.targetPatternId) {
-        // Update the existing pattern
-        this.updatePattern(sub.targetPatternId, {
+      } else if (sub.type === "modify" && sub.targetSpellId) {
+        // Update the existing spell
+        this.updateSpell(sub.targetSpellId, {
           label: sub.label,
           description: sub.description,
           intention: sub.intention,
@@ -552,7 +552,7 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
       id: row.id,
       type: row.type,
       status: row.status,
-      targetPatternId: row.target_pattern_id,
+      targetSpellId: row.target_spell_id,
       domainSlug: row.domain_slug,
       categorySlug: row.category_slug,
       label: row.label,
@@ -581,19 +581,19 @@ export class SqlitePatternStore implements PatternStore, SubmissionStore {
       slug: c.slug,
       name: c.name,
       description: c.description,
-      patterns: this.getPatternsForCategoryId(c.id),
+      spells: this.getSpellsForCategoryId(c.id),
     }));
   }
 
   /**
-   * Returns patterns for a category, including ids for management operations.
+   * Returns spells for a category, including ids for management operations.
    * The extra `id` field is harmless for the MCP tools which just serialize to JSON.
    */
-  private getPatternsForCategoryId(categoryId: number): PatternWithId[] {
+  private getSpellsForCategoryId(categoryId: number): SpellWithId[] {
     return this.db
       .prepare(
-        "SELECT id, label, description, intention, template FROM patterns WHERE category_id = ? ORDER BY id"
+        "SELECT id, label, description, intention, template FROM grimoire WHERE category_id = ? ORDER BY id"
       )
-      .all(categoryId) as PatternWithId[];
+      .all(categoryId) as SpellWithId[];
   }
 }

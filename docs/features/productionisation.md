@@ -2,7 +2,7 @@
 
 Status: Not started
 
-The Patterns MCP server needs hardening and operational tooling to be deployable as a reliable, secure production service. Currently the codebase has a solid foundation (clean TypeScript, 116 passing tests, dual MCP + REST interface), but lacks the security, observability, and deployment infrastructure needed for real-world use.
+The Spells MCP server needs hardening and operational tooling to be deployable as a reliable, secure production service. Currently the codebase has a solid foundation (clean TypeScript, 116 passing tests, dual MCP + REST interface), but lacks the security, observability, and deployment infrastructure needed for real-world use.
 
 ## Scope
 
@@ -16,7 +16,7 @@ The HTTP server is currently open to abuse if exposed publicly.
 * [ ] Configure CORS to restrict allowed origins
 * [ ] Add security headers via `helmet`
 * [ ] Enforce request body size limits
-* [ ] Sanitize user-submitted content (pattern templates, descriptions) to prevent stored XSS
+* [ ] Sanitize user-submitted content (spell templates, descriptions) to prevent stored XSS
 * [ ] Add CSRF protection for admin cookie-based auth
 * [ ] Implement session expiry (tokens currently live forever until restart)
 * [ ] Add HTTPS/TLS support or document reverse proxy setup
@@ -66,7 +66,7 @@ No README or deployment guide exists.
 
 * Migration away from SQLite (sufficient for expected scale)
 * Multi-user auth system (single admin secret is fine for now)
-* Pattern versioning / history tracking (future feature)
+* Spell versioning / history tracking (future feature)
 * API versioning (premature at this stage)
 
 Done Criteria:

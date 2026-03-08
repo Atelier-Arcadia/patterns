@@ -1,8 +1,8 @@
 {
-  "name": "@atelier/patterns",
+  "name": "@atelier/grimoire",
   "version": "0.1.0",
   "type": "module",
-  "description": "Pattern Discovery MCP Server — hierarchical pattern database for LLM interactions",
+  "description": "Grimoire MCP Server — hierarchical spell database for LLM interactions",
   "scripts": {
     "build": "tsc",
     "start:stdio": "tsx src/stdio.ts",

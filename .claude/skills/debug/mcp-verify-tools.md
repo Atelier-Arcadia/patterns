@@ -5,30 +5,30 @@ description: Verify MCP tools work correctly by connecting an in-process client 
 
 # Verify MCP Tools
 
-Connect a debug client to the pattern-discovery MCP server via InMemoryTransport and exercise each tool against the production database.
+Connect a debug client to the grimoire-mcp MCP server via InMemoryTransport and exercise each tool against the production database.
 
 ## Prerequisites
 
 - Node.js and `tsx` available
-- `patterns.db` exists (run the HTTP server at least once to initialize)
+- `grimoire.db` exists (run the HTTP server at least once to initialize)
 - Dependencies installed (`node_modules` present)
 
 ## Script
 
-Create a temporary file `debug-verify.ts` in the patterns project root:
+Create a temporary file `debug-verify.ts` in the spells project root:
 
 ```typescript
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "./src/server.js";
-import { SqlitePatternStore } from "./src/sqlite-store.js";
+import { SqliteGrimoire } from "./src/sqlite-store.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbPath = join(__dirname, "patterns.db");
+const dbPath = join(__dirname, "grimoire.db");
 
-const store = new SqlitePatternStore(dbPath);
+const store = new SqliteGrimoire(dbPath);
 store.initialize();
 
 const server = createServer(store);
@@ -77,9 +77,9 @@ if (domains.length > 0) {
     console.log(`=== match (domain: "${slug}", categories: [${catSlugs.join(", ")}]) ===`);
     const matchResult = await client.callTool({ name: "match", arguments: { domain: slug, categories: catSlugs } });
     console.log("isError:", matchResult.isError ?? false);
-    const patterns = JSON.parse((matchResult.content as any)[0].text);
-    console.log(`Found ${patterns.length} pattern(s):`);
-    for (const p of patterns) {
+    const spells = JSON.parse((matchResult.content as any)[0].text);
+    console.log(`Found ${spells.length} spell(s):`);
+    for (const p of spells) {
       console.log(`  - ${p.label}: ${p.description}`);
     }
     console.log();
@@ -102,7 +102,7 @@ store.close();
 ## Execution
 
 ```bash
-cd /Users/asher/Code/Atelier/patterns
+cd /Users/asher/Code/Atelier/spells
 npx tsx debug-verify.ts
 ```
 
@@ -111,7 +111,7 @@ npx tsx debug-verify.ts
 - `tools/list` shows all 3 tools (discover, match, suggest) with correct required fields
 - `discover` with no args returns domains with `slug`, `name`, `description`
 - `discover` with a valid domain returns categories
-- `match` returns patterns for given domain + categories
+- `match` returns spells for given domain + categories
 - `discover` with invalid domain returns `isError: true`
 
 ## Cleanup
@@ -122,7 +122,7 @@ rm debug-verify.ts
 
 ## Adapting for New Tools
 
-To verify a new tool, add a section to the script following the pattern:
+To verify a new tool, add a section to the script following the spell:
 
 ```typescript
 console.log("=== tool-name (scenario description) ===");

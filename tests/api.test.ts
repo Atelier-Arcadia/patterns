@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import express from "express";
-import { SqlitePatternStore } from "../src/sqlite-store.js";
+import { SqliteGrimoire } from "../src/sqlite-store.js";
 import { createApiRouter } from "../src/api.js";
 import { authStatus, clearSessions } from "../src/auth.js";
 
@@ -38,11 +38,11 @@ async function req(
 }
 
 describe("API Router", () => {
-  let store: SqlitePatternStore;
+  let store: SqliteGrimoire;
   let app: express.Express;
 
   beforeAll(() => {
-    store = new SqlitePatternStore(":memory:");
+    store = new SqliteGrimoire(":memory:");
     store.initialize();
     app = express();
     app.use(express.json());
@@ -56,7 +56,7 @@ describe("API Router", () => {
 
   // Seed fresh data before each test
   beforeEach(() => {
-    // Clear all domains (cascades to categories and patterns)
+    // Clear all domains (cascades to categories and spells)
     for (const d of store.getDomains()) {
       store.deleteDomain(d.slug);
     }
@@ -92,7 +92,7 @@ describe("API Router", () => {
       const res = await req(app, "POST", "/api/domains", {
         slug: "eng",
         name: "Engineering",
-        description: "Eng patterns",
+        description: "Eng spells",
       });
       expect(res.status).toBe(201);
       expect(res.body.slug).toBe("eng");
@@ -161,7 +161,7 @@ describe("API Router", () => {
       const res = await req(app, "POST", "/api/domains/eng/categories", {
         slug: "features",
         name: "Features",
-        description: "Feature patterns",
+        description: "Feature spells",
       });
       expect(res.status).toBe(201);
       expect(res.body.slug).toBe("features");
@@ -226,14 +226,14 @@ describe("API Router", () => {
     });
   });
 
-  // -- Patterns --
+  // -- Spells --
 
-  describe("POST /api/domains/:slug/categories/:catSlug/patterns", () => {
-    it("creates a pattern", async () => {
+  describe("POST /api/domains/:slug/categories/:catSlug/spells", () => {
+    it("creates a spell", async () => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
       store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
 
-      const res = await req(app, "POST", "/api/domains/eng/categories/features/patterns", {
+      const res = await req(app, "POST", "/api/domains/eng/categories/features/spells", {
         label: "create-feature",
         description: "Create a feature",
         intention: "User wants a feature",
@@ -242,13 +242,13 @@ describe("API Router", () => {
       expect(res.status).toBe(201);
       expect(res.body.label).toBe("create-feature");
 
-      const patterns = store.getPatterns("eng", ["features"]);
-      expect(patterns).toHaveLength(1);
+      const spells = store.getSpells("eng", ["features"]);
+      expect(spells).toHaveLength(1);
     });
 
     it("returns 404 for nonexistent category", async () => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
-      const res = await req(app, "POST", "/api/domains/eng/categories/nonexistent/patterns", {
+      const res = await req(app, "POST", "/api/domains/eng/categories/nonexistent/spells", {
         label: "x",
         description: "x",
         intention: "x",
@@ -260,59 +260,59 @@ describe("API Router", () => {
     it("returns 400 for missing fields", async () => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
       store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
-      const res = await req(app, "POST", "/api/domains/eng/categories/features/patterns", {
+      const res = await req(app, "POST", "/api/domains/eng/categories/features/spells", {
         label: "x",
       });
       expect(res.status).toBe(400);
     });
   });
 
-  describe("PUT /api/patterns/:id", () => {
-    it("updates a pattern", async () => {
+  describe("PUT /api/spells/:id", () => {
+    it("updates a spell", async () => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
       store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
-      store.addPattern("eng", "features", {
+      store.addSpell("eng", "features", {
         label: "p1",
         description: "d",
         intention: "i",
         template: "t",
       });
-      const id = store.getPatternsWithIds("eng", ["features"])[0].id;
+      const id = store.getSpellsWithIds("eng", ["features"])[0].id;
 
-      const res = await req(app, "PUT", `/api/patterns/${id}`, {
+      const res = await req(app, "PUT", `/api/spells/${id}`, {
         label: "updated-label",
       });
       expect(res.status).toBe(200);
-      expect(store.getPatternsWithIds("eng", ["features"])[0].label).toBe("updated-label");
+      expect(store.getSpellsWithIds("eng", ["features"])[0].label).toBe("updated-label");
     });
 
-    it("returns 404 for nonexistent pattern", async () => {
-      const res = await req(app, "PUT", "/api/patterns/99999", {
+    it("returns 404 for nonexistent spell", async () => {
+      const res = await req(app, "PUT", "/api/spells/99999", {
         label: "x",
       });
       expect(res.status).toBe(404);
     });
   });
 
-  describe("DELETE /api/patterns/:id", () => {
-    it("deletes a pattern", async () => {
+  describe("DELETE /api/spells/:id", () => {
+    it("deletes a spell", async () => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
       store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
-      store.addPattern("eng", "features", {
+      store.addSpell("eng", "features", {
         label: "p1",
         description: "d",
         intention: "i",
         template: "t",
       });
-      const id = store.getPatternsWithIds("eng", ["features"])[0].id;
+      const id = store.getSpellsWithIds("eng", ["features"])[0].id;
 
-      const res = await req(app, "DELETE", `/api/patterns/${id}`);
+      const res = await req(app, "DELETE", `/api/spells/${id}`);
       expect(res.status).toBe(200);
-      expect(store.getPatterns("eng", ["features"])).toHaveLength(0);
+      expect(store.getSpells("eng", ["features"])).toHaveLength(0);
     });
 
-    it("returns 404 for nonexistent pattern", async () => {
-      const res = await req(app, "DELETE", "/api/patterns/99999");
+    it("returns 404 for nonexistent spell", async () => {
+      const res = await req(app, "DELETE", "/api/spells/99999");
       expect(res.status).toBe(404);
     });
   });
@@ -402,8 +402,8 @@ describe("API Router", () => {
         type: "new",
         domainSlug: "eng",
         categorySlug: "features",
-        label: "new-pattern",
-        description: "A new pattern",
+        label: "new-spell",
+        description: "A new spell",
         intention: "User wants this",
         template: "# Template",
       });
@@ -415,17 +415,17 @@ describe("API Router", () => {
     it("creates a 'modify' submission without auth", async () => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
       store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
-      store.addPattern("eng", "features", {
+      store.addSpell("eng", "features", {
         label: "p1",
         description: "d",
         intention: "i",
         template: "t",
       });
-      const patternId = store.getPatternsWithIds("eng", ["features"])[0].id;
+      const spellId = store.getSpellsWithIds("eng", ["features"])[0].id;
 
       const res = await req(app, "POST", "/api/submissions", {
         type: "modify",
-        targetPatternId: patternId,
+        targetSpellId: spellId,
         label: "improved-p1",
         description: "Better desc",
         intention: "Better intention",
@@ -506,7 +506,7 @@ describe("API Router", () => {
         type: "new",
         domainSlug: "eng",
         categorySlug: "features",
-        label: "approved-pattern",
+        label: "approved-spell",
         description: "d",
         intention: "i",
         template: "t",
@@ -522,9 +522,9 @@ describe("API Router", () => {
       });
       expect(res.status).toBe(200);
 
-      // Pattern should have been created
-      const patterns = store.getPatterns("eng", ["features"]);
-      expect(patterns.some((p) => p.label === "approved-pattern")).toBe(true);
+      // Spell should have been created
+      const spells = store.getSpells("eng", ["features"]);
+      expect(spells.some((p) => p.label === "approved-spell")).toBe(true);
     });
 
     it("rejects a submission when authenticated as admin", async () => {
@@ -537,7 +537,7 @@ describe("API Router", () => {
         type: "new",
         domainSlug: "eng",
         categorySlug: "features",
-        label: "rejected-pattern",
+        label: "rejected-spell",
         description: "d",
         intention: "i",
         template: "t",
@@ -557,9 +557,9 @@ describe("API Router", () => {
       const sub = store.getSubmission(subId);
       expect(sub!.status).toBe("rejected");
 
-      // Pattern should NOT have been created
-      const patterns = store.getPatterns("eng", ["features"]);
-      expect(patterns.some((p) => p.label === "rejected-pattern")).toBe(false);
+      // Spell should NOT have been created
+      const spells = store.getSpells("eng", ["features"]);
+      expect(spells.some((p) => p.label === "rejected-spell")).toBe(false);
     });
 
     it("auto-creates domain and category when accepting submission with nonexistent domain", async () => {
@@ -569,7 +569,7 @@ describe("API Router", () => {
         type: "new",
         domainSlug: "brand-new",
         categorySlug: "brand-cat",
-        label: "auto-created-pattern",
+        label: "auto-created-spell",
         description: "d",
         intention: "i",
         template: "t",
@@ -593,10 +593,10 @@ describe("API Router", () => {
       expect(categories).toHaveLength(1);
       expect(categories[0].slug).toBe("brand-cat");
 
-      // Pattern should have been created
-      const patterns = store.getPatterns("brand-new", ["brand-cat"]);
-      expect(patterns).toHaveLength(1);
-      expect(patterns[0].label).toBe("auto-created-pattern");
+      // Spell should have been created
+      const spells = store.getSpells("brand-new", ["brand-cat"]);
+      expect(spells).toHaveLength(1);
+      expect(spells[0].label).toBe("auto-created-spell");
     });
   });
 

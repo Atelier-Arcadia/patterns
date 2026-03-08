@@ -2,7 +2,7 @@
 
 Status: Done
 
-When a pattern suggestion references a domain or category that doesn't yet exist, approving that suggestion should automatically create the new domain or category. The web UI should prominently indicate when approving a suggestion will result in new domains or categories being created, so admins can make an informed decision.
+When a spell suggestion references a domain or category that doesn't yet exist, approving that suggestion should automatically create the new domain or category. The web UI should prominently indicate when approving a suggestion will result in new domains or categories being created, so admins can make an informed decision.
 
 Done Criteria:
 * [x] Approving a suggestion with an unknown domain automatically creates that domain

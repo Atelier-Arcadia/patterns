@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pattern Manager</title>
+  <title>Grimoire Manager</title>
   <style>
     :root {
       --bg: #0f0f0f;
@@ -201,7 +201,7 @@
       font-size: 0.95rem;
     }
 
-    .pattern-detail { margin-top: 8px; }
+    .spell-detail { margin-top: 8px; }
 
     .template-preview {
       background: var(--bg);
@@ -243,7 +243,7 @@
 <body>
   <div class="container">
     <header>
-      <h1>Pattern Manager</h1>
+      <h1>Grimoire Manager</h1>
       <div class="header-actions">
         <button id="btn-submissions" style="display:none">Submissions</button>
         <button class="primary" id="btn-new">+ New</button>
@@ -412,7 +412,7 @@
 
       for (const d of domains) {
         const catCount = d.categories ? d.categories.length : 0;
-        const patCount = d.categories ? d.categories.reduce((s, c) => s + (c.patterns?.length || 0), 0) : 0;
+        const patCount = d.categories ? d.categories.reduce((s, c) => s + (c.spells?.length || 0), 0) : 0;
 
         const actions = [];
         if (isAdmin) {
@@ -431,7 +431,7 @@
           ),
           el('div', { className: 'card-meta' },
             el('span', {}, `${catCount} categories`),
-            el('span', {}, `${patCount} patterns`),
+            el('span', {}, `${patCount} spells`),
           ),
         );
         content.appendChild(card);
@@ -448,7 +448,7 @@
       }
 
       for (const c of categories) {
-        const patCount = c.patterns?.length || 0;
+        const patCount = c.spells?.length || 0;
 
         const actions = [];
         if (isAdmin) {
@@ -466,30 +466,30 @@
             actions.length > 0 ? el('div', { className: 'card-actions' }, ...actions) : null,
           ),
           el('div', { className: 'card-meta' },
-            el('span', {}, `${patCount} patterns`),
+            el('span', {}, `${patCount} spells`),
           ),
         );
         content.appendChild(card);
       }
     }
 
-    function renderPatterns(patterns) {
+    function renderSpells(spells) {
       const content = document.getElementById('content');
       content.innerHTML = '';
 
-      if (patterns.length === 0) {
-        content.innerHTML = '<div class="empty-state">No patterns yet.</div>';
+      if (spells.length === 0) {
+        content.innerHTML = '<div class="empty-state">No spells yet.</div>';
         return;
       }
 
-      for (const p of patterns) {
+      for (const p of spells) {
         const actions = [];
         if (isAdmin) {
-          actions.push(el('button', { className: 'small', onClick: () => editPattern(p) }, 'Edit'));
-          actions.push(el('button', { className: 'small danger', onClick: () => deletePattern(p.id) }, 'Delete'));
+          actions.push(el('button', { className: 'small', onClick: () => editSpell(p) }, 'Edit'));
+          actions.push(el('button', { className: 'small danger', onClick: () => deleteSpell(p.id) }, 'Delete'));
         }
         if (!isAdmin) {
-          actions.push(el('button', { className: 'small', onClick: () => suggestModifyPattern(p) }, 'Suggest Edit'));
+          actions.push(el('button', { className: 'small', onClick: () => suggestModifySpell(p) }, 'Suggest Edit'));
         }
 
         const card = el('div', { className: 'card no-click' },
@@ -500,7 +500,7 @@
             ),
             actions.length > 0 ? el('div', { className: 'card-actions' }, ...actions) : null,
           ),
-          el('div', { className: 'pattern-detail' },
+          el('div', { className: 'spell-detail' },
             el('div', { className: 'card-desc' },
               el('strong', {}, 'Intention: '),
               document.createTextNode(p.intention),
@@ -529,8 +529,8 @@
         }
 
         const targetInfo = s.type === 'new'
-          ? `New pattern for ${s.domainSlug} / ${s.categorySlug}`
-          : `Modify pattern #${s.targetPatternId}`;
+          ? `New spell for ${s.domainSlug} / ${s.categorySlug}`
+          : `Modify spell #${s.targetSpellId}`;
 
         const impactWarnings = [];
         if (s.impact?.newDomain) {
@@ -551,7 +551,7 @@
             ),
             actions.length > 0 ? el('div', { className: 'card-actions' }, ...actions) : null,
           ),
-          el('div', { className: 'pattern-detail' },
+          el('div', { className: 'spell-detail' },
             el('div', { className: 'card-desc' },
               el('strong', {}, 'Intention: '),
               document.createTextNode(s.intention),
@@ -599,7 +599,7 @@
       renderBreadcrumb();
 
       if (currentCategory) {
-        renderPatterns(currentCategory.patterns || []);
+        renderSpells(currentCategory.spells || []);
       }
     }
 
@@ -669,11 +669,11 @@
     // -- Suggestion forms (contributor) --
 
     function showSuggestNewForm() {
-      showForm('Suggest New Pattern', [
+      showForm('Suggest New Spell', [
         { key: 'domainSlug', label: 'Domain', type: 'select', options: [], value: currentDomain?.slug },
         { key: 'categorySlug', label: 'Category', type: 'select', options: [], value: currentCategory?.slug },
-        { key: 'label', label: 'Label', placeholder: 'e.g. my-pattern' },
-        { key: 'description', label: 'Description', placeholder: 'What this pattern does' },
+        { key: 'label', label: 'Label', placeholder: 'e.g. my-spell' },
+        { key: 'description', label: 'Description', placeholder: 'What this spell does' },
         { key: 'intention', label: 'Intention', placeholder: 'When the user wants to...' },
         { key: 'template', label: 'Template', type: 'textarea', placeholder: '# Template\n\n{{variable}}' },
       ], async (values) => {
@@ -725,8 +725,8 @@
       }, 60);
     }
 
-    function suggestModifyPattern(p) {
-      showForm('Suggest Edit to Pattern', [
+    function suggestModifySpell(p) {
+      showForm('Suggest Edit to Spell', [
         { key: 'label', label: 'Label', value: p.label },
         { key: 'description', label: 'Description', value: p.description },
         { key: 'intention', label: 'Intention', value: p.intention },
@@ -734,7 +734,7 @@
       ], async (values) => {
         const { status, data } = await api('POST', '/submissions', {
           type: 'modify',
-          targetPatternId: p.id,
+          targetSpellId: p.id,
           label: values.label,
           description: values.description,
           intention: values.intention,
@@ -798,13 +798,13 @@
             navigateToDomain(currentDomain.slug);
           });
         } else if (currentCategory) {
-          showForm('New Pattern', [
+          showForm('New Spell', [
             { key: 'label', label: 'Label', placeholder: 'e.g. create-feature-request' },
-            { key: 'description', label: 'Description', placeholder: 'What this pattern does' },
+            { key: 'description', label: 'Description', placeholder: 'What this spell does' },
             { key: 'intention', label: 'Intention', placeholder: 'When the user wants to...' },
             { key: 'template', label: 'Template', type: 'textarea', placeholder: '# Template\n\n{{variable}}' },
           ], async (values) => {
-            await api('POST', `/domains/${currentDomain.slug}/categories/${currentCategory.slug}/patterns`, values);
+            await api('POST', `/domains/${currentDomain.slug}/categories/${currentCategory.slug}/spells`, values);
             navigateToCategory(currentCategory.slug);
           });
         }
@@ -829,7 +829,7 @@
     }
 
     async function deleteDomain(slug) {
-      if (!confirm(`Delete domain "${slug}" and all its categories and patterns?`)) return;
+      if (!confirm(`Delete domain "${slug}" and all its categories and spells?`)) return;
       await api('DELETE', `/domains/${slug}`);
       navigateHome();
     }
@@ -845,26 +845,26 @@
     }
 
     async function deleteCategory(catSlug) {
-      if (!confirm(`Delete category "${catSlug}" and all its patterns?`)) return;
+      if (!confirm(`Delete category "${catSlug}" and all its spells?`)) return;
       await api('DELETE', `/domains/${currentDomain.slug}/categories/${catSlug}`);
       navigateToDomain(currentDomain.slug);
     }
 
-    function editPattern(p) {
-      showForm('Edit Pattern', [
+    function editSpell(p) {
+      showForm('Edit Spell', [
         { key: 'label', label: 'Label', value: p.label },
         { key: 'description', label: 'Description', value: p.description },
         { key: 'intention', label: 'Intention', value: p.intention },
         { key: 'template', label: 'Template', type: 'textarea', value: p.template },
       ], async (values) => {
-        await api('PUT', `/patterns/${p.id}`, values);
+        await api('PUT', `/spells/${p.id}`, values);
         navigateToCategory(currentCategory.slug);
       });
     }
 
-    async function deletePattern(id) {
-      if (!confirm('Delete this pattern?')) return;
-      await api('DELETE', `/patterns/${id}`);
+    async function deleteSpell(id) {
+      if (!confirm('Delete this spell?')) return;
+      await api('DELETE', `/spells/${id}`);
       navigateToCategory(currentCategory.slug);
     }
 

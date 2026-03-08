@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { SqlitePatternStore } from "../src/sqlite-store.js";
-import type { Domain, Category, Pattern } from "../src/types.js";
+import { SqliteGrimoire } from "../src/sqlite-store.js";
+import type { Domain, Category, Spell } from "../src/types.js";
 
-describe("SqlitePatternStore", () => {
-  let store: SqlitePatternStore;
+describe("SqliteGrimoire", () => {
+  let store: SqliteGrimoire;
 
   beforeEach(() => {
-    store = new SqlitePatternStore(":memory:");
+    store = new SqliteGrimoire(":memory:");
     store.initialize();
   });
 
@@ -31,18 +31,18 @@ describe("SqlitePatternStore", () => {
     });
 
     it("adds and retrieves a domain", () => {
-      store.addDomain({ slug: "engineering", name: "Engineering", description: "Eng patterns" });
+      store.addDomain({ slug: "engineering", name: "Engineering", description: "Eng spells" });
 
       const domains = store.getDomains();
       expect(domains).toHaveLength(1);
       expect(domains[0].slug).toBe("engineering");
       expect(domains[0].name).toBe("Engineering");
-      expect(domains[0].description).toBe("Eng patterns");
+      expect(domains[0].description).toBe("Eng spells");
       expect(domains[0].categories).toEqual([]);
     });
 
     it("retrieves a domain by slug", () => {
-      store.addDomain({ slug: "engineering", name: "Engineering", description: "Eng patterns" });
+      store.addDomain({ slug: "engineering", name: "Engineering", description: "Eng spells" });
 
       const domain = store.getDomain("engineering");
       expect(domain).toBeDefined();
@@ -78,8 +78,8 @@ describe("SqlitePatternStore", () => {
     });
 
     it("adds and retrieves categories for a domain", () => {
-      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature patterns" });
-      store.addCategory("eng", { slug: "bugs", name: "Bugs", description: "Bug patterns" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature spells" });
+      store.addCategory("eng", { slug: "bugs", name: "Bugs", description: "Bug spells" });
 
       const categories = store.getCategories("eng");
       expect(categories).toHaveLength(2);
@@ -89,12 +89,12 @@ describe("SqlitePatternStore", () => {
     });
 
     it("returns category metadata correctly", () => {
-      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature patterns" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature spells" });
 
       const categories = store.getCategories("eng");
       expect(categories[0].name).toBe("Features");
-      expect(categories[0].description).toBe("Feature patterns");
-      expect(categories[0].patterns).toEqual([]);
+      expect(categories[0].description).toBe("Feature spells");
+      expect(categories[0].spells).toEqual([]);
     });
 
     it("returns empty array for unknown domain", () => {
@@ -102,76 +102,76 @@ describe("SqlitePatternStore", () => {
     });
   });
 
-  describe("addPattern / getPatterns", () => {
+  describe("addSpell / getSpells", () => {
     beforeEach(() => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
-      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature patterns" });
-      store.addCategory("eng", { slug: "bugs", name: "Bugs", description: "Bug patterns" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature spells" });
+      store.addCategory("eng", { slug: "bugs", name: "Bugs", description: "Bug spells" });
     });
 
-    it("adds and retrieves patterns for a category", () => {
-      store.addPattern("eng", "features", {
+    it("adds and retrieves spells for a category", () => {
+      store.addSpell("eng", "features", {
         label: "create-feature",
         description: "Create a feature",
         intention: "User wants a feature",
         template: "# Feature: {{name}}",
       });
 
-      const patterns = store.getPatterns("eng", ["features"]);
-      expect(patterns).toHaveLength(1);
-      expect(patterns[0].label).toBe("create-feature");
-      expect(patterns[0].description).toBe("Create a feature");
-      expect(patterns[0].intention).toBe("User wants a feature");
-      expect(patterns[0].template).toBe("# Feature: {{name}}");
+      const spells = store.getSpells("eng", ["features"]);
+      expect(spells).toHaveLength(1);
+      expect(spells[0].label).toBe("create-feature");
+      expect(spells[0].description).toBe("Create a feature");
+      expect(spells[0].intention).toBe("User wants a feature");
+      expect(spells[0].template).toBe("# Feature: {{name}}");
     });
 
-    it("returns patterns from multiple categories", () => {
-      store.addPattern("eng", "features", {
+    it("returns spells from multiple categories", () => {
+      store.addSpell("eng", "features", {
         label: "create-feature",
         description: "Create a feature",
         intention: "User wants a feature",
         template: "# Feature",
       });
-      store.addPattern("eng", "bugs", {
+      store.addSpell("eng", "bugs", {
         label: "report-bug",
         description: "Report a bug",
         intention: "User found a bug",
         template: "# Bug",
       });
 
-      const patterns = store.getPatterns("eng", ["features", "bugs"]);
-      expect(patterns).toHaveLength(2);
-      const labels = patterns.map((p) => p.label).sort();
+      const spells = store.getSpells("eng", ["features", "bugs"]);
+      expect(spells).toHaveLength(2);
+      const labels = spells.map((p) => p.label).sort();
       expect(labels).toEqual(["create-feature", "report-bug"]);
     });
 
     it("returns empty array for unknown domain", () => {
-      expect(store.getPatterns("nonexistent", ["features"])).toEqual([]);
+      expect(store.getSpells("nonexistent", ["features"])).toEqual([]);
     });
 
     it("returns empty array for unknown categories", () => {
-      expect(store.getPatterns("eng", ["nonexistent"])).toEqual([]);
+      expect(store.getSpells("eng", ["nonexistent"])).toEqual([]);
     });
 
     it("ignores unknown categories and returns known ones", () => {
-      store.addPattern("eng", "features", {
+      store.addSpell("eng", "features", {
         label: "create-feature",
         description: "Create a feature",
         intention: "User wants a feature",
         template: "# Feature",
       });
 
-      const patterns = store.getPatterns("eng", ["features", "nonexistent"]);
-      expect(patterns).toHaveLength(1);
-      expect(patterns[0].label).toBe("create-feature");
+      const spells = store.getSpells("eng", ["features", "nonexistent"]);
+      expect(spells).toHaveLength(1);
+      expect(spells[0].label).toBe("create-feature");
     });
   });
 
-  describe("getDomain includes categories with patterns", () => {
-    it("returns full domain with nested categories and patterns", () => {
+  describe("getDomain includes categories with spells", () => {
+    it("returns full domain with nested categories and spells", () => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
-      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature patterns" });
-      store.addPattern("eng", "features", {
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature spells" });
+      store.addSpell("eng", "features", {
         label: "create-feature",
         description: "Create a feature",
         intention: "User wants a feature",
@@ -182,8 +182,8 @@ describe("SqlitePatternStore", () => {
       expect(domain).toBeDefined();
       expect(domain!.categories).toHaveLength(1);
       expect(domain!.categories[0].slug).toBe("features");
-      expect(domain!.categories[0].patterns).toHaveLength(1);
-      expect(domain!.categories[0].patterns[0].label).toBe("create-feature");
+      expect(domain!.categories[0].spells).toHaveLength(1);
+      expect(domain!.categories[0].spells[0].label).toBe("create-feature");
     });
   });
 
@@ -231,9 +231,9 @@ describe("SqlitePatternStore", () => {
       expect(store.getDomains()).toHaveLength(0);
     });
 
-    it("cascades to categories and patterns", () => {
+    it("cascades to categories and spells", () => {
       store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
-      store.addPattern("eng", "features", {
+      store.addSpell("eng", "features", {
         label: "p1",
         description: "d",
         intention: "i",
@@ -242,7 +242,7 @@ describe("SqlitePatternStore", () => {
 
       store.deleteDomain("eng");
       expect(store.getCategories("eng")).toEqual([]);
-      expect(store.getPatterns("eng", ["features"])).toEqual([]);
+      expect(store.getSpells("eng", ["features"])).toEqual([]);
     });
 
     it("throws for nonexistent domain", () => {
@@ -253,14 +253,14 @@ describe("SqlitePatternStore", () => {
   describe("updateCategory", () => {
     beforeEach(() => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
-      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature patterns" });
+      store.addCategory("eng", { slug: "features", name: "Features", description: "Feature spells" });
     });
 
     it("updates category name", () => {
       store.updateCategory("eng", "features", { name: "Feature Requests" });
       const categories = store.getCategories("eng");
       expect(categories[0].name).toBe("Feature Requests");
-      expect(categories[0].description).toBe("Feature patterns"); // unchanged
+      expect(categories[0].description).toBe("Feature spells"); // unchanged
     });
 
     it("updates category description", () => {
@@ -290,15 +290,15 @@ describe("SqlitePatternStore", () => {
       expect(store.getCategories("eng")).toHaveLength(0);
     });
 
-    it("cascades to patterns", () => {
-      store.addPattern("eng", "features", {
+    it("cascades to spells", () => {
+      store.addSpell("eng", "features", {
         label: "p1",
         description: "d",
         intention: "i",
         template: "t",
       });
       store.deleteCategory("eng", "features");
-      expect(store.getPatterns("eng", ["features"])).toEqual([]);
+      expect(store.getSpells("eng", ["features"])).toEqual([]);
     });
 
     it("throws for nonexistent category", () => {
@@ -306,132 +306,132 @@ describe("SqlitePatternStore", () => {
     });
   });
 
-  describe("getPatternsWithIds", () => {
+  describe("getSpellsWithIds", () => {
     beforeEach(() => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
       store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
     });
 
-    it("returns patterns with numeric ids", () => {
-      store.addPattern("eng", "features", {
+    it("returns spells with numeric ids", () => {
+      store.addSpell("eng", "features", {
         label: "p1",
         description: "d1",
         intention: "i1",
         template: "t1",
       });
-      store.addPattern("eng", "features", {
+      store.addSpell("eng", "features", {
         label: "p2",
         description: "d2",
         intention: "i2",
         template: "t2",
       });
 
-      const patterns = store.getPatternsWithIds("eng", ["features"]);
-      expect(patterns).toHaveLength(2);
-      expect(patterns[0]).toHaveProperty("id");
-      expect(typeof patterns[0].id).toBe("number");
-      expect(patterns[0].label).toBe("p1");
-      expect(patterns[1].label).toBe("p2");
+      const spells = store.getSpellsWithIds("eng", ["features"]);
+      expect(spells).toHaveLength(2);
+      expect(spells[0]).toHaveProperty("id");
+      expect(typeof spells[0].id).toBe("number");
+      expect(spells[0].label).toBe("p1");
+      expect(spells[1].label).toBe("p2");
     });
 
     it("returns empty array for unknown domain", () => {
-      expect(store.getPatternsWithIds("nonexistent", ["features"])).toEqual([]);
+      expect(store.getSpellsWithIds("nonexistent", ["features"])).toEqual([]);
     });
   });
 
-  describe("updatePattern", () => {
-    let patternId: number;
+  describe("updateSpell", () => {
+    let spellId: number;
 
     beforeEach(() => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
       store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
-      store.addPattern("eng", "features", {
+      store.addSpell("eng", "features", {
         label: "p1",
         description: "Original desc",
         intention: "Original intention",
         template: "Original template",
       });
-      const patterns = store.getPatternsWithIds("eng", ["features"]);
-      patternId = patterns[0].id;
+      const spells = store.getSpellsWithIds("eng", ["features"]);
+      spellId = spells[0].id;
     });
 
-    it("updates pattern label", () => {
-      store.updatePattern(patternId, { label: "new-label" });
-      const patterns = store.getPatternsWithIds("eng", ["features"]);
-      expect(patterns[0].label).toBe("new-label");
-      expect(patterns[0].description).toBe("Original desc"); // unchanged
+    it("updates spell label", () => {
+      store.updateSpell(spellId, { label: "new-label" });
+      const spells = store.getSpellsWithIds("eng", ["features"]);
+      expect(spells[0].label).toBe("new-label");
+      expect(spells[0].description).toBe("Original desc"); // unchanged
     });
 
-    it("updates pattern description", () => {
-      store.updatePattern(patternId, { description: "New desc" });
-      const patterns = store.getPatternsWithIds("eng", ["features"]);
-      expect(patterns[0].description).toBe("New desc");
+    it("updates spell description", () => {
+      store.updateSpell(spellId, { description: "New desc" });
+      const spells = store.getSpellsWithIds("eng", ["features"]);
+      expect(spells[0].description).toBe("New desc");
     });
 
-    it("updates pattern intention", () => {
-      store.updatePattern(patternId, { intention: "New intention" });
-      const patterns = store.getPatternsWithIds("eng", ["features"]);
-      expect(patterns[0].intention).toBe("New intention");
+    it("updates spell intention", () => {
+      store.updateSpell(spellId, { intention: "New intention" });
+      const spells = store.getSpellsWithIds("eng", ["features"]);
+      expect(spells[0].intention).toBe("New intention");
     });
 
-    it("updates pattern template", () => {
-      store.updatePattern(patternId, { template: "New template" });
-      const patterns = store.getPatternsWithIds("eng", ["features"]);
-      expect(patterns[0].template).toBe("New template");
+    it("updates spell template", () => {
+      store.updateSpell(spellId, { template: "New template" });
+      const spells = store.getSpellsWithIds("eng", ["features"]);
+      expect(spells[0].template).toBe("New template");
     });
 
     it("updates multiple fields at once", () => {
-      store.updatePattern(patternId, { label: "x", description: "y", intention: "z", template: "w" });
-      const patterns = store.getPatternsWithIds("eng", ["features"]);
-      expect(patterns[0].label).toBe("x");
-      expect(patterns[0].description).toBe("y");
-      expect(patterns[0].intention).toBe("z");
-      expect(patterns[0].template).toBe("w");
+      store.updateSpell(spellId, { label: "x", description: "y", intention: "z", template: "w" });
+      const spells = store.getSpellsWithIds("eng", ["features"]);
+      expect(spells[0].label).toBe("x");
+      expect(spells[0].description).toBe("y");
+      expect(spells[0].intention).toBe("z");
+      expect(spells[0].template).toBe("w");
     });
 
-    it("throws for nonexistent pattern id", () => {
-      expect(() => store.updatePattern(99999, { label: "x" })).toThrow();
+    it("throws for nonexistent spell id", () => {
+      expect(() => store.updateSpell(99999, { label: "x" })).toThrow();
     });
   });
 
-  describe("deletePattern", () => {
-    let patternId: number;
+  describe("deleteSpell", () => {
+    let spellId: number;
 
     beforeEach(() => {
       store.addDomain({ slug: "eng", name: "Engineering", description: "Eng" });
       store.addCategory("eng", { slug: "features", name: "Features", description: "Features" });
-      store.addPattern("eng", "features", {
+      store.addSpell("eng", "features", {
         label: "p1",
         description: "d",
         intention: "i",
         template: "t",
       });
-      const patterns = store.getPatternsWithIds("eng", ["features"]);
-      patternId = patterns[0].id;
+      const spells = store.getSpellsWithIds("eng", ["features"]);
+      spellId = spells[0].id;
     });
 
-    it("deletes a pattern by id", () => {
-      store.deletePattern(patternId);
-      const patterns = store.getPatterns("eng", ["features"]);
-      expect(patterns).toHaveLength(0);
+    it("deletes a spell by id", () => {
+      store.deleteSpell(spellId);
+      const spells = store.getSpells("eng", ["features"]);
+      expect(spells).toHaveLength(0);
     });
 
-    it("throws for nonexistent pattern id", () => {
-      expect(() => store.deletePattern(99999)).toThrow();
+    it("throws for nonexistent spell id", () => {
+      expect(() => store.deleteSpell(99999)).toThrow();
     });
 
-    it("only deletes the targeted pattern", () => {
-      store.addPattern("eng", "features", {
+    it("only deletes the targeted spell", () => {
+      store.addSpell("eng", "features", {
         label: "p2",
         description: "d2",
         intention: "i2",
         template: "t2",
       });
 
-      store.deletePattern(patternId);
-      const patterns = store.getPatterns("eng", ["features"]);
-      expect(patterns).toHaveLength(1);
-      expect(patterns[0].label).toBe("p2");
+      store.deleteSpell(spellId);
+      const spells = store.getSpells("eng", ["features"]);
+      expect(spells).toHaveLength(1);
+      expect(spells[0].label).toBe("p2");
     });
   });
 
@@ -452,8 +452,8 @@ describe("SqlitePatternStore", () => {
         type: "new",
         domainSlug: "eng",
         categorySlug: "features",
-        label: "proposed-pattern",
-        description: "A proposed pattern",
+        label: "proposed-spell",
+        description: "A proposed spell",
         intention: "User wants to propose",
         template: "# Proposed",
       });
@@ -466,27 +466,27 @@ describe("SqlitePatternStore", () => {
       expect(sub!.status).toBe("pending");
       expect(sub!.domainSlug).toBe("eng");
       expect(sub!.categorySlug).toBe("features");
-      expect(sub!.targetPatternId).toBeNull();
-      expect(sub!.label).toBe("proposed-pattern");
-      expect(sub!.description).toBe("A proposed pattern");
+      expect(sub!.targetSpellId).toBeNull();
+      expect(sub!.label).toBe("proposed-spell");
+      expect(sub!.description).toBe("A proposed spell");
       expect(sub!.intention).toBe("User wants to propose");
       expect(sub!.template).toBe("# Proposed");
       expect(sub!.submittedAt).toBeDefined();
       expect(sub!.reviewedAt).toBeNull();
     });
 
-    it("creates a 'modify' submission referencing an existing pattern", () => {
-      store.addPattern("eng", "features", {
+    it("creates a 'modify' submission referencing an existing spell", () => {
+      store.addSpell("eng", "features", {
         label: "existing",
         description: "d",
         intention: "i",
         template: "t",
       });
-      const patternId = store.getPatternsWithIds("eng", ["features"])[0].id;
+      const spellId = store.getSpellsWithIds("eng", ["features"])[0].id;
 
       const id = store.addSubmission({
         type: "modify",
-        targetPatternId: patternId,
+        targetSpellId: spellId,
         label: "improved-existing",
         description: "Better description",
         intention: "Better intention",
@@ -495,7 +495,7 @@ describe("SqlitePatternStore", () => {
 
       const sub = store.getSubmission(id);
       expect(sub!.type).toBe("modify");
-      expect(sub!.targetPatternId).toBe(patternId);
+      expect(sub!.targetSpellId).toBe(spellId);
       expect(sub!.label).toBe("improved-existing");
     });
 
@@ -550,7 +550,7 @@ describe("SqlitePatternStore", () => {
         type: "new",
         domainSlug: "eng",
         categorySlug: "features",
-        label: "sourced-pattern",
+        label: "sourced-spell",
         description: "d",
         intention: "i",
         template: "t",
@@ -602,12 +602,12 @@ describe("SqlitePatternStore", () => {
       expect(sub!.reviewedAt).toBeDefined();
       expect(sub!.reviewedAt).not.toBeNull();
 
-      // Pattern should NOT have been created
-      const patterns = store.getPatterns("eng", ["features"]);
-      expect(patterns).toHaveLength(0);
+      // Spell should NOT have been created
+      const spells = store.getSpells("eng", ["features"]);
+      expect(spells).toHaveLength(0);
     });
 
-    it("accepts a 'new' submission — creates the pattern", () => {
+    it("accepts a 'new' submission — creates the spell", () => {
       const id = store.addSubmission({
         type: "new",
         domainSlug: "eng",
@@ -624,27 +624,27 @@ describe("SqlitePatternStore", () => {
       expect(sub!.status).toBe("accepted");
       expect(sub!.reviewedAt).not.toBeNull();
 
-      // Pattern should have been created
-      const patterns = store.getPatterns("eng", ["features"]);
-      expect(patterns).toHaveLength(1);
-      expect(patterns[0].label).toBe("accepted-new");
-      expect(patterns[0].description).toBe("Accepted desc");
-      expect(patterns[0].intention).toBe("Accepted intention");
-      expect(patterns[0].template).toBe("Accepted template");
+      // Spell should have been created
+      const spells = store.getSpells("eng", ["features"]);
+      expect(spells).toHaveLength(1);
+      expect(spells[0].label).toBe("accepted-new");
+      expect(spells[0].description).toBe("Accepted desc");
+      expect(spells[0].intention).toBe("Accepted intention");
+      expect(spells[0].template).toBe("Accepted template");
     });
 
-    it("accepts a 'modify' submission — updates the target pattern", () => {
-      store.addPattern("eng", "features", {
+    it("accepts a 'modify' submission — updates the target spell", () => {
+      store.addSpell("eng", "features", {
         label: "original",
         description: "Original desc",
         intention: "Original intention",
         template: "Original template",
       });
-      const patternId = store.getPatternsWithIds("eng", ["features"])[0].id;
+      const spellId = store.getSpellsWithIds("eng", ["features"])[0].id;
 
       const id = store.addSubmission({
         type: "modify",
-        targetPatternId: patternId,
+        targetSpellId: spellId,
         label: "modified",
         description: "Modified desc",
         intention: "Modified intention",
@@ -656,13 +656,13 @@ describe("SqlitePatternStore", () => {
       const sub = store.getSubmission(id);
       expect(sub!.status).toBe("accepted");
 
-      // Pattern should have been updated
-      const patterns = store.getPatternsWithIds("eng", ["features"]);
-      expect(patterns).toHaveLength(1);
-      expect(patterns[0].label).toBe("modified");
-      expect(patterns[0].description).toBe("Modified desc");
-      expect(patterns[0].intention).toBe("Modified intention");
-      expect(patterns[0].template).toBe("Modified template");
+      // Spell should have been updated
+      const spells = store.getSpellsWithIds("eng", ["features"]);
+      expect(spells).toHaveLength(1);
+      expect(spells[0].label).toBe("modified");
+      expect(spells[0].description).toBe("Modified desc");
+      expect(spells[0].intention).toBe("Modified intention");
+      expect(spells[0].template).toBe("Modified template");
     });
 
     it("throws for nonexistent submission id", () => {
@@ -711,9 +711,9 @@ describe("SqlitePatternStore", () => {
       expect(categories[0].name).toBe("New Cat");
       expect(categories[0].description).toBe("Auto-created category");
 
-      const patterns = store.getPatterns("new-domain", ["new-cat"]);
-      expect(patterns).toHaveLength(1);
-      expect(patterns[0].label).toBe("s1");
+      const spells = store.getSpells("new-domain", ["new-cat"]);
+      expect(spells).toHaveLength(1);
+      expect(spells[0].label).toBe("s1");
     });
 
     it("auto-creates only category when domain exists but category does not", () => {
@@ -735,15 +735,15 @@ describe("SqlitePatternStore", () => {
       expect(newCat).toBeDefined();
       expect(newCat!.name).toBe("New Cat");
 
-      const patterns = store.getPatterns("eng", ["new-cat"]);
-      expect(patterns).toHaveLength(1);
+      const spells = store.getSpells("eng", ["new-cat"]);
+      expect(spells).toHaveLength(1);
     });
 
     it("auto-creates both domain and category when both are nonexistent", () => {
       const id = store.addSubmission({
         type: "new",
         domainSlug: "design",
-        categorySlug: "ui-patterns",
+        categorySlug: "ui-spells",
         label: "button-states",
         description: "d",
         intention: "i",
@@ -758,11 +758,11 @@ describe("SqlitePatternStore", () => {
 
       const categories = store.getCategories("design");
       expect(categories).toHaveLength(1);
-      expect(categories[0].slug).toBe("ui-patterns");
-      expect(categories[0].name).toBe("Ui Patterns");
+      expect(categories[0].slug).toBe("ui-spells");
+      expect(categories[0].name).toBe("Ui Spells");
 
-      const patterns = store.getPatterns("design", ["ui-patterns"]);
-      expect(patterns).toHaveLength(1);
+      const spells = store.getSpells("design", ["ui-spells"]);
+      expect(spells).toHaveLength(1);
     });
 
     it("does not auto-create when rejecting a submission with nonexistent domain", () => {
@@ -872,17 +872,17 @@ describe("SqlitePatternStore", () => {
     });
 
     it("returns null impacts for modify submissions", () => {
-      store.addPattern("eng", "features", {
+      store.addSpell("eng", "features", {
         label: "p1",
         description: "d",
         intention: "i",
         template: "t",
       });
-      const patternId = store.getPatternsWithIds("eng", ["features"])[0].id;
+      const spellId = store.getSpellsWithIds("eng", ["features"])[0].id;
 
       const id = store.addSubmission({
         type: "modify",
-        targetPatternId: patternId,
+        targetSpellId: spellId,
         label: "improved",
         description: "d",
         intention: "i",

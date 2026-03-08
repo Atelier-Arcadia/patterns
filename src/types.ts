@@ -1,7 +1,7 @@
 /**
- * A pattern maps an intention to a structured prompt template.
+ * A spell maps an intention to a structured prompt template.
  */
-export interface Pattern {
+export interface Spell {
   label: string;
   description: string;
   intention: string;
@@ -9,24 +9,24 @@ export interface Pattern {
 }
 
 /**
- * A pattern with its database id, used for update/delete operations.
+ * A spell with its database id, used for update/delete operations.
  */
-export interface PatternWithId extends Pattern {
+export interface SpellWithId extends Spell {
   id: number;
 }
 
 /**
- * A category groups related patterns within a domain.
+ * A category groups related spells within a domain.
  */
 export interface Category {
   name: string;
   slug: string;
   description: string;
-  patterns: Pattern[];
+  spells: Spell[];
 }
 
 /**
- * A domain is a top-level knowledge area containing categories of patterns.
+ * A domain is a top-level knowledge area containing categories of spells.
  */
 export interface Domain {
   name: string;
@@ -36,15 +36,15 @@ export interface Domain {
 }
 
 /**
- * A submission is a proposed pattern change from an anonymous contributor.
- * Type 'new' proposes adding a pattern to a domain/category.
- * Type 'modify' proposes changes to an existing pattern.
+ * A submission is a proposed spell change from an anonymous contributor.
+ * Type 'new' proposes adding a spell to a domain/category.
+ * Type 'modify' proposes changes to an existing spell.
  */
 export interface Submission {
   id: number;
   type: "new" | "modify";
   status: "pending" | "accepted" | "rejected";
-  targetPatternId: number | null;
+  targetSpellId: number | null;
   domainSlug: string | null;
   categorySlug: string | null;
   label: string;
@@ -61,7 +61,7 @@ export interface Submission {
  */
 export interface SubmissionInput {
   type: "new" | "modify";
-  targetPatternId?: number;
+  targetSpellId?: number;
   domainSlug?: string;
   categorySlug?: string;
   label: string;
@@ -72,13 +72,13 @@ export interface SubmissionInput {
 }
 
 /**
- * Common query interface for pattern storage backends.
+ * Common query interface for spell storage backends.
  */
-export interface PatternStore {
+export interface Grimoire {
   getDomains(): Domain[];
   getDomain(slug: string): Domain | undefined;
   getCategories(domainSlug: string): Category[];
-  getPatterns(domainSlug: string, categorySlugs: string[]): Pattern[];
+  getSpells(domainSlug: string, categorySlugs: string[]): Spell[];
 }
 
 /**

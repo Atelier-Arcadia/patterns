@@ -2,26 +2,26 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../src/server.js";
-import { SqlitePatternStore } from "../src/sqlite-store.js";
+import { SqliteGrimoire } from "../src/sqlite-store.js";
 
-function seedTestStore(store: SqlitePatternStore): void {
+function seedTestStore(store: SqliteGrimoire): void {
   store.addDomain({ slug: "test-domain", name: "Test Domain", description: "A test domain for unit tests" });
   store.addDomain({ slug: "another-domain", name: "Another Domain", description: "A second domain for listing tests" });
-  store.addCategory("test-domain", { slug: "widgets", name: "Widgets", description: "Patterns for widget creation" });
-  store.addCategory("test-domain", { slug: "gadgets", name: "Gadgets", description: "Patterns for gadget operations" });
-  store.addPattern("test-domain", "widgets", {
+  store.addCategory("test-domain", { slug: "widgets", name: "Widgets", description: "Spells for widget creation" });
+  store.addCategory("test-domain", { slug: "gadgets", name: "Gadgets", description: "Spells for gadget operations" });
+  store.addSpell("test-domain", "widgets", {
     label: "create-widget",
     description: "Create a new widget from a description",
     intention: "The user wants to create a widget",
     template: "# Widget: {{name}}\n## Purpose\n{{purpose}}\n",
   });
-  store.addPattern("test-domain", "widgets", {
+  store.addSpell("test-domain", "widgets", {
     label: "update-widget",
     description: "Update an existing widget",
     intention: "The user wants to modify a widget",
     template: "# Update Widget: {{name}}\n## Changes\n{{changes}}\n",
   });
-  store.addPattern("test-domain", "gadgets", {
+  store.addSpell("test-domain", "gadgets", {
     label: "build-gadget",
     description: "Build a gadget from specifications",
     intention: "The user wants to build a gadget",
@@ -31,10 +31,10 @@ function seedTestStore(store: SqlitePatternStore): void {
 
 describe("MCP Integration", () => {
   let client: Client;
-  let store: SqlitePatternStore;
+  let store: SqliteGrimoire;
 
   beforeAll(async () => {
-    store = new SqlitePatternStore(":memory:");
+    store = new SqliteGrimoire(":memory:");
     store.initialize();
     seedTestStore(store);
 
@@ -91,7 +91,7 @@ describe("MCP Integration", () => {
     expect(required).not.toContain("domain");
   });
 
-  it("match tool returns patterns", async () => {
+  it("match tool returns spells", async () => {
     const result = await client.callTool({
       name: "match",
       arguments: { domain: "test-domain", categories: ["widgets"] },
@@ -121,15 +121,15 @@ describe("MCP Integration", () => {
     const categories = JSON.parse((categoriesResult.content as any)[0].text);
     const categorySlugs = categories.map((c: any) => c.slug);
 
-    // Step 3: Match patterns using discovered categories
+    // Step 3: Match spells using discovered categories
     const matchResult = await client.callTool({
       name: "match",
       arguments: { domain: testDomain.slug, categories: categorySlugs },
     });
-    const patterns = JSON.parse((matchResult.content as any)[0].text);
+    const spells = JSON.parse((matchResult.content as any)[0].text);
 
-    expect(patterns).toHaveLength(3);
-    const labels = patterns.map((p: any) => p.label).sort();
+    expect(spells).toHaveLength(3);
+    const labels = spells.map((p: any) => p.label).sort();
     expect(labels).toEqual(["build-gadget", "create-widget", "update-widget"]);
   });
 
@@ -141,16 +141,16 @@ describe("MCP Integration", () => {
     expect(result.isError).toBe(true);
   });
 
-  it("suggest tool creates a new pattern submission", async () => {
+  it("suggest tool creates a new spell submission", async () => {
     const result = await client.callTool({
       name: "suggest",
       arguments: {
         type: "new",
         domainSlug: "test-domain",
         categorySlug: "widgets",
-        label: "mcp-suggested-pattern",
-        description: "Pattern suggested via MCP",
-        intention: "User wants to suggest a pattern from their LLM session",
+        label: "mcp-suggested-spell",
+        description: "Spell suggested via MCP",
+        intention: "User wants to suggest a spell from their LLM session",
         template: "# MCP Suggestion\n{{content}}",
         source: "mcp:integration-test",
       },
@@ -159,7 +159,7 @@ describe("MCP Integration", () => {
     expect(result.isError).toBeFalsy();
     const data = JSON.parse((result.content as any)[0].text);
     expect(data.status).toBe("pending");
-    expect(data.label).toBe("mcp-suggested-pattern");
+    expect(data.label).toBe("mcp-suggested-spell");
     expect(data.source).toBe("mcp:integration-test");
 
     // Verify it landed in the store
@@ -169,14 +169,14 @@ describe("MCP Integration", () => {
   });
 
   it("suggest tool creates a modify submission", async () => {
-    const patterns = store.getPatternsWithIds("test-domain", ["widgets"]);
-    const targetId = patterns[0].id;
+    const spells = store.getSpellsWithIds("test-domain", ["widgets"]);
+    const targetId = spells[0].id;
 
     const result = await client.callTool({
       name: "suggest",
       arguments: {
         type: "modify",
-        targetPatternId: targetId,
+        targetSpellId: targetId,
         label: "improved-create-widget",
         description: "Better widget creation",
         intention: "Improved widget creation flow",
@@ -188,7 +188,7 @@ describe("MCP Integration", () => {
     expect(result.isError).toBeFalsy();
     const data = JSON.parse((result.content as any)[0].text);
     expect(data.type).toBe("modify");
-    expect(data.targetPatternId).toBe(targetId);
+    expect(data.targetSpellId).toBe(targetId);
   });
 
   it("suggest tool returns error without source", async () => {

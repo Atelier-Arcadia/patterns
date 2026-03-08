@@ -1,14 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { PatternStore, SubmissionStore } from "./types.js";
+import type { Grimoire, SubmissionStore } from "./types.js";
 import { createDiscoverHandler, createMatchHandler, createSuggestHandler } from "./tools.js";
 
 /**
  * Creates and configures the MCP server with discover, match, and suggest tools.
  */
-export function createServer(db: PatternStore & SubmissionStore): McpServer {
+export function createServer(db: Grimoire & SubmissionStore): McpServer {
   const server = new McpServer({
-    name: "pattern-discovery",
+    name: "grimoire-mcp",
     version: "0.1.0",
   });
 
@@ -18,32 +18,32 @@ export function createServer(db: PatternStore & SubmissionStore): McpServer {
 
   server.tool(
     "discover",
-    "Explore the pattern hierarchy. With no arguments, returns all available domains. With a domain slug, returns the categories within that domain.",
+    "Explore the spell hierarchy. With no arguments, returns all available domains. With a domain slug, returns the categories within that domain.",
     { domain: z.string().optional().describe("The domain slug to discover categories for (e.g. 'software-engineering'). Omit to list all domains.") },
     async (args) => discoverHandler(args)
   );
 
   server.tool(
     "match",
-    "Given a domain and one or more categories, returns patterns that match. Each pattern includes a label, description, intention, and prompt template.",
+    "Given a domain and one or more categories, returns spells that match. Each spell includes a label, description, intention, and prompt template.",
     {
       domain: z.string().describe("The domain slug to search within"),
-      categories: z.array(z.string()).describe("Category slugs to match patterns from"),
+      categories: z.array(z.string()).describe("Category slugs to match spells from"),
     },
     async (args) => matchHandler(args)
   );
 
   server.tool(
     "suggest",
-    "Submit a suggestion to add a new pattern or edit an existing one. Suggestions are queued for admin review. Requires a source identifier to attribute the origin of the suggestion.",
+    "Submit a suggestion to add a new spell or edit an existing one. Suggestions are queued for admin review. Requires a source identifier to attribute the origin of the suggestion.",
     {
-      type: z.enum(["new", "modify"]).describe("'new' to suggest a new pattern, 'modify' to suggest changes to an existing one"),
+      type: z.enum(["new", "modify"]).describe("'new' to suggest a new spell, 'modify' to suggest changes to an existing one"),
       domainSlug: z.string().optional().describe("Domain slug for 'new' suggestions (e.g. 'software-engineering')"),
       categorySlug: z.string().optional().describe("Category slug for 'new' suggestions (e.g. 'features')"),
-      targetPatternId: z.number().optional().describe("Pattern ID to modify (required for 'modify' type)"),
-      label: z.string().describe("Short identifier for the pattern (e.g. 'error-handling')"),
-      description: z.string().describe("Human-readable description of the pattern"),
-      intention: z.string().describe("What the user intends when this pattern applies"),
+      targetSpellId: z.number().optional().describe("Spell ID to modify (required for 'modify' type)"),
+      label: z.string().describe("Short identifier for the spell (e.g. 'error-handling')"),
+      description: z.string().describe("Human-readable description of the spell"),
+      intention: z.string().describe("What the user intends when this spell applies"),
       template: z.string().describe("The prompt template content"),
       source: z.string().describe("Identifier for who/what is submitting (e.g. 'claude-code:user123')"),
     },

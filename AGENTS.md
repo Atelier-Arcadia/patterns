@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Instructions for LLMs working on the Pattern Discovery MCP server.
+Instructions for LLMs working on the Grimoire MCP server.
 
 ## What This Project Is
 
-An MCP server that exposes a hierarchical pattern database. Patterns are organized as **domains > categories > patterns** and stored in SQLite. The server provides three tools (`discover`, `match`, `suggest`) that LLMs use to find and apply structured prompt templates.
+An MCP server that exposes a hierarchical spell database. Spells are organized as **domains > categories > spells** and stored in SQLite. The server provides three tools (`discover`, `match`, `suggest`) that LLMs use to find and apply structured prompt templates.
 
 This project runs locally and is not production-ready.
 
@@ -14,7 +14,7 @@ This project runs locally and is not production-ready.
 src/
 ├── server.ts          # Creates the McpServer, registers the three tools
 ├── tools.ts           # Handler logic for discover, match, suggest
-├── types.ts           # Core interfaces: Domain, Category, Pattern, Submission, PatternStore, SubmissionStore
+├── types.ts           # Core interfaces: Domain, Category, Spell, Submission, Grimoire, SubmissionStore
 ├── sqlite-store.ts    # SQLite implementation of all store interfaces + full CRUD
 ├── stdio.ts           # Entrypoint: stdio transport (for MCP clients)
 ├── http.ts            # Entrypoint: HTTP transport (MCP + REST API + web UI)
@@ -32,15 +32,15 @@ tests/
 
 ### Key Interfaces (src/types.ts)
 
-- **`PatternStore`** — read-only: `getDomains()`, `getDomain(slug)`, `getCategories(domainSlug)`, `getPatterns(domainSlug, categorySlugs)`
+- **`Grimoire`** — read-only: `getDomains()`, `getDomain(slug)`, `getCategories(domainSlug)`, `getSpells(domainSlug, categorySlugs)`
 - **`SubmissionStore`** — submissions: `addSubmission(input)`, `getSubmission(id)`, `getSubmissions(status?)`
-- **`SqlitePatternStore`** implements both interfaces plus full CRUD for the admin API
+- **`SqliteGrimoire`** implements both interfaces plus full CRUD for the admin API
 
 ### Data Model
 
 - **Domain**: `{ slug, name, description, categories[] }`
-- **Category**: `{ slug, name, description, patterns[] }`
-- **Pattern**: `{ label, description, intention, template }`
+- **Category**: `{ slug, name, description, spells[] }`
+- **Spell**: `{ label, description, intention, template }`
 - **Submission**: `{ type, status, domainSlug?, categorySlug?, label, description, intention, template, source }`
 
 ### MCP Tools
@@ -48,12 +48,12 @@ tests/
 | Tool | Input | Output |
 |------|-------|--------|
 | `discover` | `{ domain: string }` | Array of categories in that domain |
-| `match` | `{ domain: string, categories: string[] }` | Array of matching patterns with templates |
+| `match` | `{ domain: string, categories: string[] }` | Array of matching spells with templates |
 | `suggest` | `{ type, label, description, intention, template, source, ... }` | Confirmation with submission ID |
 
 ## Running Tests
 
-All tests use in-memory SQLite — they never touch `patterns.db`.
+All tests use in-memory SQLite — they never touch `grimoire.db`.
 
 ```bash
 # Run all tests
@@ -104,9 +104,9 @@ npx @modelcontextprotocol/inspector --cli npx tsx src/stdio.ts \
 
 **When to use**: After changing tool handlers, query logic, or the database schema. Always verify both happy paths and error paths.
 
-### debug-patterns-app — Full Application Debugging
+### debug-grimoire-app — Full Application Debugging
 
-**Location**: `.claude/skills/debug-patterns-app/SKILL.md`
+**Location**: `.claude/skills/debug-grimoire-app/SKILL.md`
 
 Covers all three application surfaces: MCP stdio, REST API, and web UI. Includes:
 
@@ -119,8 +119,8 @@ Covers all three application surfaces: MCP stdio, REST API, and web UI. Includes
 **When to use**: After changing the API, store layer, or web UI. The debug script is especially useful for verifying CRUD lifecycle and cascade deletes work correctly.
 
 Key things to verify:
-- `GET /api/domains` returns the full hierarchy with pattern `id` fields
-- Cascade deletes work (deleting a domain removes its categories and patterns)
+- `GET /api/domains` returns the full hierarchy with spell `id` fields
+- Cascade deletes work (deleting a domain removes its categories and spells)
 - Error responses return proper status codes and `{ "error": "message" }` format
 
 ### mcp-dev — MCP SDK Reference
@@ -137,18 +137,18 @@ Reference material for building MCP servers with the TypeScript SDK. Covers:
 
 **When to use**: When adding new MCP tools, changing transport configuration, or working with the MCP SDK APIs.
 
-## Suggesting New Patterns
+## Suggesting New Spells
 
-Patterns can be suggested via the `suggest` MCP tool or the web UI's public submission form. When you identify a useful, repeatable pattern during development:
+Spells can be suggested via the `suggest` MCP tool or the web UI's public submission form. When you identify a useful, repeatable spell during development:
 
-1. **Check if it already exists**: Use `discover` to browse domains/categories, then `match` to see existing patterns
+1. **Check if it already exists**: Use `discover` to browse domains/categories, then `match` to see existing spells
 2. **Submit via the suggest tool**:
-   - `type`: `"new"` for a new pattern, `"modify"` to change an existing one
-   - `domainSlug` / `categorySlug`: Where the pattern belongs (for `"new"`)
-   - `targetPatternId`: Which pattern to modify (for `"modify"`)
+   - `type`: `"new"` for a new spell, `"modify"` to change an existing one
+   - `domainSlug` / `categorySlug`: Where the spell belongs (for `"new"`)
+   - `targetSpellId`: Which spell to modify (for `"modify"`)
    - `label`: Short kebab-case identifier (e.g. `"error-handling"`)
-   - `description`: What the pattern does
-   - `intention`: What the user is trying to accomplish when this pattern applies
+   - `description`: What the spell does
+   - `intention`: What the user is trying to accomplish when this spell applies
    - `template`: The structured prompt template content
    - `source`: Attribution string (e.g. `"claude-code:session-id"`)
 

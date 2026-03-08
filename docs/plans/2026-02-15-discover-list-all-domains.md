@@ -6,7 +6,7 @@ Feature: docs/features/2026-02-15-discover-list-all-domains.md
 
 ## Summary
 
-Make the `discover` MCP tool's `domain` parameter optional. When omitted, return all available domain slugs and labels so callers can enumerate the full pattern hierarchy from the top down.
+Make the `discover` MCP tool's `domain` parameter optional. When omitted, return all available domain slugs and labels so callers can enumerate the full spell hierarchy from the top down.
 
 ## Changes
 

@@ -1,4 +1,4 @@
-import type { PatternStore, SubmissionStore } from "./types.js";
+import type { Grimoire, SubmissionStore } from "./types.js";
 
 interface ToolResult {
   [key: string]: unknown;
@@ -11,7 +11,7 @@ interface ToolResult {
  * When called with a domain slug, returns its categories.
  * When called with no domain, returns all available domains.
  */
-export function createDiscoverHandler(db: PatternStore) {
+export function createDiscoverHandler(db: Grimoire) {
   return async (args: { domain?: string }): Promise<ToolResult> => {
     // No domain provided — list all domains
     if (!args.domain) {
@@ -54,9 +54,9 @@ export function createDiscoverHandler(db: PatternStore) {
 
 /**
  * Creates a handler for the `match` tool.
- * Given a domain slug and category slugs, returns matching patterns.
+ * Given a domain slug and category slugs, returns matching spells.
  */
-export function createMatchHandler(db: PatternStore) {
+export function createMatchHandler(db: Grimoire) {
   return async (args: {
     domain: string;
     categories: string[];
@@ -74,24 +74,24 @@ export function createMatchHandler(db: PatternStore) {
       };
     }
 
-    const patterns = db.getPatterns(args.domain, args.categories);
+    const spells = db.getSpells(args.domain, args.categories);
 
     return {
-      content: [{ type: "text", text: JSON.stringify(patterns, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(spells, null, 2) }],
     };
   };
 }
 
 /**
  * Creates a handler for the `suggest` tool.
- * Allows LLM users to submit pattern suggestions (new or edit) with a source identifier.
+ * Allows LLM users to submit spell suggestions (new or edit) with a source identifier.
  */
-export function createSuggestHandler(db: PatternStore & SubmissionStore) {
+export function createSuggestHandler(db: Grimoire & SubmissionStore) {
   return async (args: {
     type: string;
     domainSlug?: string;
     categorySlug?: string;
-    targetPatternId?: number;
+    targetSpellId?: number;
     label: string;
     description: string;
     intention: string;
@@ -124,7 +124,7 @@ export function createSuggestHandler(db: PatternStore & SubmissionStore) {
       };
     }
 
-    // Validate required pattern fields
+    // Validate required spell fields
     if (!args.label || !args.description || !args.intention || !args.template) {
       return {
         content: [
@@ -140,7 +140,7 @@ export function createSuggestHandler(db: PatternStore & SubmissionStore) {
     try {
       const id = db.addSubmission({
         type: args.type,
-        targetPatternId: args.targetPatternId,
+        targetSpellId: args.targetSpellId,
         domainSlug: args.domainSlug,
         categorySlug: args.categorySlug,
         label: args.label,

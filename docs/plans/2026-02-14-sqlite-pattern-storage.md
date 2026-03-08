@@ -1,36 +1,36 @@
-# Plan: SQLite Pattern Storage
+# Plan: SQLite Spell Storage
 
 ## Approach
 
-Introduce a `PatternStore` interface that both the existing YAML backend and new SQLite backend implement. This keeps the YAML path available as a fallback/import source while the SQLite backend becomes the primary storage.
+Introduce a `Grimoire` interface that both the existing YAML backend and new SQLite backend implement. This keeps the YAML path available as a fallback/import source while the SQLite backend becomes the primary storage.
 
 ## Steps
 
-### 1. Define `PatternStore` interface (`src/types.ts`)
+### 1. Define `Grimoire` interface (`src/types.ts`)
 
-- Extract the query methods from `PatternDatabase` into an interface: `getDomains()`, `getDomain(slug)`, `getCategories(domainSlug)`, `getPatterns(domainSlug, categorySlugs)`
-- Make existing `PatternDatabase` implement it
+- Extract the query methods from `SpellDatabase` into an interface: `getDomains()`, `getDomain(slug)`, `getCategories(domainSlug)`, `getSpells(domainSlug, categorySlugs)`
+- Make existing `SpellDatabase` implement it
 
 ### 2. Install `better-sqlite3`
 
 - Add `better-sqlite3` + `@types/better-sqlite3` as dependencies
 
-### 3. Create `SqlitePatternStore` (`src/sqlite-store.ts`)
+### 3. Create `SqliteGrimoire` (`src/sqlite-store.ts`)
 
-- Schema: `domains(id, slug UNIQUE, name, description)`, `categories(id, domain_id FK, slug, name, description)`, `patterns(id, category_id FK, label, description, intention, template)`
+- Schema: `domains(id, slug UNIQUE, name, description)`, `categories(id, domain_id FK, slug, name, description)`, `spells(id, category_id FK, label, description, intention, template)`
 - Constructor takes a database file path (or `:memory:` for testing)
 - `initialize()` creates tables with `CREATE TABLE IF NOT EXISTS`
-- Implements all `PatternStore` interface methods
+- Implements all `Grimoire` interface methods
 
 ### 4. Create YAML import utility (`src/import-yaml.ts`)
 
-- Reads existing YAML files using the current `PatternDatabase.load()` logic
-- Inserts all domains, categories, and patterns into a `SqlitePatternStore`
+- Reads existing YAML files using the current `SpellDatabase.load()` logic
+- Inserts all domains, categories, and spells into a `SqliteGrimoire`
 - Can be run as a standalone script
 
 ### 5. Update entrypoints (`src/stdio.ts`, `src/http.ts`)
 
-- Switch from `PatternDatabase` to `SqlitePatternStore`
+- Switch from `SpellDatabase` to `SqliteGrimoire`
 - On first run, if DB doesn't exist, auto-import from YAML
 
 ### 6. Tests (TDD)
@@ -41,8 +41,8 @@ Introduce a `PatternStore` interface that both the existing YAML backend and new
 
 ## Files Modified
 
-- `src/types.ts` -- add `PatternStore` interface
-- `src/database.ts` -- implement `PatternStore`
+- `src/types.ts` -- add `Grimoire` interface
+- `src/database.ts` -- implement `Grimoire`
 - `src/sqlite-store.ts` -- new file
 - `src/import-yaml.ts` -- new file
 - `src/stdio.ts` -- use SQLite store
@@ -53,6 +53,6 @@ Introduce a `PatternStore` interface that both the existing YAML backend and new
 
 ## What stays the same
 
-- `tools.ts` and `server.ts` accept `PatternStore` interface (type change only)
+- `tools.ts` and `server.ts` accept `Grimoire` interface (type change only)
 - All existing test assertions remain valid
 - YAML files preserved on disk as source-of-truth for initial data

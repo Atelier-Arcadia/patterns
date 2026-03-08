@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "patterns": {
+    "grimoire": {
       "command": "npx",
       "args": ["tsx", "src/stdio.ts"]
     }

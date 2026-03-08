@@ -1,6 +1,6 @@
 import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { SqlitePatternStore } from "./sqlite-store.js";
+import { SqliteGrimoire } from "./sqlite-store.js";
 import { createServer } from "./server.js";
 import { createApiRouter } from "./api.js";
 import { authStatus } from "./auth.js";
@@ -9,11 +9,11 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbPath = join(__dirname, "..", "patterns.db");
+const dbPath = join(__dirname, "..", "grimoire.db");
 
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
 
-const store = new SqlitePatternStore(dbPath);
+const store = new SqliteGrimoire(dbPath);
 store.initialize();
 
 const app = express();
@@ -64,8 +64,8 @@ app.all("/mcp", async (req, res) => {
 });
 
 app.listen(PORT, "127.0.0.1", () => {
-  console.error(`Pattern Discovery MCP Server running on http://127.0.0.1:${PORT}/mcp`);
-  console.error(`Pattern Manager UI available at http://127.0.0.1:${PORT}/`);
+  console.error(`Grimoire MCP Server running on http://127.0.0.1:${PORT}/mcp`);
+  console.error(`Grimoire Manager UI available at http://127.0.0.1:${PORT}/`);
   if (process.env.ADMIN_SECRET) {
     console.error("Admin access: enabled (ADMIN_SECRET is set)");
   } else {

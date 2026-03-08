@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { SqlitePatternStore } from "./sqlite-store.js";
+import type { SqliteGrimoire } from "./sqlite-store.js";
 import { login, logout, isAdminConfigured, parseCookie, requireAdmin } from "./auth.js";
 
 /**
@@ -11,9 +11,9 @@ function getParam(value: string | string[]): string {
 
 /**
  * Creates an Express router with REST endpoints for managing
- * the Domain > Category > Pattern hierarchy, plus auth and submissions.
+ * the Domain > Category > Spell hierarchy, plus auth and submissions.
  */
-export function createApiRouter(store: SqlitePatternStore): Router {
+export function createApiRouter(store: SqliteGrimoire): Router {
   const router = Router();
 
   // -- Auth --
@@ -54,7 +54,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
   // -- Submissions (public: create, admin: list + review) --
 
   router.post("/submissions", (req, res) => {
-    const { type, targetPatternId, domainSlug, categorySlug, label, description, intention, template, source } = req.body ?? {};
+    const { type, targetSpellId, domainSlug, categorySlug, label, description, intention, template, source } = req.body ?? {};
 
     if (!type || !label || !description || !intention || !template) {
       res.status(400).json({ error: "Missing required fields: type, label, description, intention, template" });
@@ -69,7 +69,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
     try {
       const id = store.addSubmission({
         type,
-        targetPatternId,
+        targetSpellId,
         domainSlug,
         categorySlug,
         label,
@@ -227,9 +227,9 @@ export function createApiRouter(store: SqlitePatternStore): Router {
     }
   });
 
-  // -- Patterns --
+  // -- Spells --
 
-  router.post("/domains/:slug/categories/:catSlug/patterns", (req, res) => {
+  router.post("/domains/:slug/categories/:catSlug/spells", (req, res) => {
     const { label, description, intention, template } = req.body ?? {};
     if (!label || !description || !intention || !template) {
       res.status(400).json({
@@ -239,7 +239,7 @@ export function createApiRouter(store: SqlitePatternStore): Router {
     }
 
     try {
-      store.addPattern(getParam(req.params.slug), getParam(req.params.catSlug), {
+      store.addSpell(getParam(req.params.slug), getParam(req.params.catSlug), {
         label,
         description,
         intention,
@@ -255,16 +255,16 @@ export function createApiRouter(store: SqlitePatternStore): Router {
     }
   });
 
-  router.put("/patterns/:id", (req, res) => {
+  router.put("/spells/:id", (req, res) => {
     const id = parseInt(getParam(req.params.id), 10);
     if (isNaN(id)) {
-      res.status(400).json({ error: "Invalid pattern id" });
+      res.status(400).json({ error: "Invalid spell id" });
       return;
     }
 
     const { label, description, intention, template } = req.body ?? {};
     try {
-      store.updatePattern(id, { label, description, intention, template });
+      store.updateSpell(id, { label, description, intention, template });
       res.json({ ok: true });
     } catch (err: any) {
       if (err.message?.includes("not found")) {
@@ -275,15 +275,15 @@ export function createApiRouter(store: SqlitePatternStore): Router {
     }
   });
 
-  router.delete("/patterns/:id", (req, res) => {
+  router.delete("/spells/:id", (req, res) => {
     const id = parseInt(getParam(req.params.id), 10);
     if (isNaN(id)) {
-      res.status(400).json({ error: "Invalid pattern id" });
+      res.status(400).json({ error: "Invalid spell id" });
       return;
     }
 
     try {
-      store.deletePattern(id);
+      store.deleteSpell(id);
       res.json({ ok: true });
     } catch (err: any) {
       if (err.message?.includes("not found")) {

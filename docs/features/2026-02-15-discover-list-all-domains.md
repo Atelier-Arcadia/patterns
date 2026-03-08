@@ -2,9 +2,9 @@
 
 Status: Not started
 
-Currently the `discover` MCP tool requires a `domain` parameter to return categories within that domain. There is no way to programmatically list all available domains, which creates a discoverability gap — callers must already know domain slugs before they can explore the pattern hierarchy.
+Currently the `discover` MCP tool requires a `domain` parameter to return categories within that domain. There is no way to programmatically list all available domains, which creates a discoverability gap — callers must already know domain slugs before they can explore the spell hierarchy.
 
-When the `discover` tool is invoked with no arguments (i.e. `domain` is omitted), it should return a list of all available domain slugs and their labels, allowing callers to enumerate the full pattern hierarchy from the top down.
+When the `discover` tool is invoked with no arguments (i.e. `domain` is omitted), it should return a list of all available domain slugs and their labels, allowing callers to enumerate the full spell hierarchy from the top down.
 
 Done Criteria:
 * [ ] The `domain` parameter on the `discover` tool is optional

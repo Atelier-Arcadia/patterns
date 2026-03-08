@@ -1,6 +1,6 @@
-# @atelier/patterns
+# @atelier/grimoire
 
-A local MCP server that gives LLMs access to a hierarchical pattern database. Patterns are organized into **domains > categories > patterns**, and LLMs can discover, match, and suggest new patterns through three simple tools.
+A local MCP server that gives LLMs access to a hierarchical spell database. Spells are organized into **domains > categories > spells**, and LLMs can discover, match, and suggest new spells through three simple tools.
 
 > **This project is intended for local use only and is not production-ready.** Auth is session-based and in-memory, there's no rate limiting, and the SQLite database lives on disk alongside the code. Treat it as a personal development tool.
 
@@ -17,7 +17,7 @@ The most common way to use this. Clone the repository and then add it to your MC
 ```json
 {
   "mcpServers": {
-    "patterns": {
+    "spells": {
       "command": "npx",
       "args": ["tsx", "path/to/src/stdio.ts"]
     }
@@ -49,21 +49,21 @@ Set `PORT` to change the default port.
 | Tool | Description |
 |------|-------------|
 | `discover` | Given a domain, returns its available categories |
-| `match` | Given a domain + categories, returns matching patterns with templates |
-| `suggest` | Submit a new pattern suggestion with source tracking |
+| `match` | Given a domain + categories, returns matching spells with templates |
+| `suggest` | Submit a new spell suggestion with source tracking |
 
 ## How It Works
 
-Patterns are stored in a local SQLite database (`patterns.db`). Each pattern has a **label**, **description**, **intention** (what the user wants), and a **template** (structured prompt).
+Spells are stored in a local SQLite database (`grimoire.db`). Each spell has a **label**, **description**, **intention** (what the user wants), and a **template** (structured prompt).
 
 The typical flow:
 
 1. LLM calls `discover` with a domain (e.g. `"software-engineering"`)
 2. Server returns the domain's categories
 3. LLM calls `match` with relevant categories
-4. Server returns patterns with templates the LLM can apply
+4. Server returns spells with templates the LLM can apply
 
-The web UI provides full CRUD for managing domains, categories, and patterns, plus a review workflow for community-submitted suggestions.
+The web UI provides full CRUD for managing domains, categories, and spells, plus a review workflow for community-submitted suggestions.
 
 ## Development
 

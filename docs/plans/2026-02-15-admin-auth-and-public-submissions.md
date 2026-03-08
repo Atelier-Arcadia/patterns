@@ -1,8 +1,8 @@
-# Plan: Admin Authentication & Public Pattern Submissions
+# Plan: Admin Authentication & Public Spell Submissions
 
 ## Overview
 
-Add two user modes to the Pattern Manager: **admin** (authenticated via secret) and **contributor** (unauthenticated). Contributors can browse patterns read-only and submit proposals. Admins see the full current UI plus a review queue for submissions.
+Add two user modes to the Grimoire Manager: **admin** (authenticated via secret) and **contributor** (unauthenticated). Contributors can browse spells read-only and submit proposals. Admins see the full current UI plus a review queue for submissions.
 
 ## Decisions
 
@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS submissions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   type TEXT NOT NULL CHECK(type IN ('new', 'modify')),
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected')),
-  -- For 'modify': which pattern is being modified
-  target_pattern_id INTEGER,
+  -- For 'modify': which spell is being modified
+  target_spell_id INTEGER,
   -- For 'new': which domain/category to add to
   domain_slug TEXT,
   category_slug TEXT,
@@ -32,16 +32,16 @@ CREATE TABLE IF NOT EXISTS submissions (
   -- Metadata
   submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
   reviewed_at TEXT,
-  FOREIGN KEY (target_pattern_id) REFERENCES patterns(id) ON DELETE SET NULL
+  FOREIGN KEY (target_spell_id) REFERENCES spells(id) ON DELETE SET NULL
 );
 ```
 
-New store methods: `addSubmission()`, `getSubmissions(status?)`, `getSubmission(id)`, `reviewSubmission(id, 'accepted' | 'rejected')` (accepting a 'new' submission creates the pattern; accepting a 'modify' updates the target pattern).
+New store methods: `addSubmission()`, `getSubmissions(status?)`, `getSubmission(id)`, `reviewSubmission(id, 'accepted' | 'rejected')` (accepting a 'new' submission creates the spell; accepting a 'modify' updates the target spell).
 
 ## 2. API Layer — New endpoints
 
 **Public (no auth):**
-- `POST /api/submissions` — Submit a new pattern proposal or modification
+- `POST /api/submissions` — Submit a new spell proposal or modification
 - `GET /api/domains` — Keep as-is (read-only for everyone)
 
 **Admin-only (requires auth):**
@@ -50,7 +50,7 @@ New store methods: `addSubmission()`, `getSubmissions(status?)`, `getSubmission(
 - `GET /api/auth/status` — Check if currently authenticated (also returns whether admin is configured at all)
 - `GET /api/submissions` — List submissions (filterable by status)
 - `POST /api/submissions/:id/review` — Accept or reject a submission
-- All existing mutation endpoints (POST/PUT/DELETE on domains, categories, patterns) — protected behind auth middleware
+- All existing mutation endpoints (POST/PUT/DELETE on domains, categories, spells) — protected behind auth middleware
 
 **Auth mechanism**: Compare provided secret against `ADMIN_SECRET` env var. If `ADMIN_SECRET` is not set, login always fails and admin features are unavailable. Use a simple randomly-generated session token stored in-memory (Map), set via `Set-Cookie`. No database session table needed for a single-admin app.
 
@@ -59,7 +59,7 @@ New store methods: `addSubmission()`, `getSubmissions(status?)`, `getSubmission(
 The single `index.html` will detect auth status on load (`GET /api/auth/status`) and render accordingly:
 
 **Contributor mode** (not authenticated):
-- Browse domains/categories/patterns (read-only, no Edit/Delete buttons)
+- Browse domains/categories/spells (read-only, no Edit/Delete buttons)
 - "Login" button in header opens a simple password prompt (hidden if admin is not configured)
 - "+ Suggest" button replaces "+ New" — opens a form to submit a proposal (new or modify)
 - Can see their submission was received (success toast)

@@ -1,25 +1,25 @@
-# Plan: Pattern Management Web App
+# Plan: Spell Management Web App
 
 ## Overview
 
-Add a web-based management UI for the Domain > Category > Pattern hierarchy. The work divides into three layers: store mutations, REST API, and frontend.
+Add a web-based management UI for the Domain > Category > Spell hierarchy. The work divides into three layers: store mutations, REST API, and frontend.
 
 ## Layer 1: Store Mutations
 
-Extend `SqlitePatternStore` with update and delete methods. The `PatternStore` interface stays read-only (it's the MCP query contract); mutation methods live only on the concrete class.
+Extend `SqliteGrimoire` with update and delete methods. The `Grimoire` interface stays read-only (it's the MCP query contract); mutation methods live only on the concrete class.
 
-### New methods on `SqlitePatternStore`:
+### New methods on `SqliteGrimoire`:
 
 ```
 updateDomain(slug, changes: { name?, description? }): void
 deleteDomain(slug): void
 updateCategory(domainSlug, categorySlug, changes: { name?, description? }): void
 deleteCategory(domainSlug, categorySlug): void
-updatePattern(id, changes: { label?, description?, intention?, template? }): void
-deletePattern(id): void
+updateSpell(id, changes: { label?, description?, intention?, template? }): void
+deleteSpell(id): void
 ```
 
-**Note**: Patterns need an `id` for update/delete since they don't have a unique slug. The `getPatterns` and related methods should be extended to return `id` as well.
+**Note**: Spells need an `id` for update/delete since they don't have a unique slug. The `getSpells` and related methods should be extended to return `id` as well.
 
 ### Tests (RED first):
 - `sqlite-store.test.ts`: Add describe blocks for each new method
@@ -35,16 +35,16 @@ Create `src/api.ts` — an Express Router with JSON endpoints.
 
 | Method | Path | Action |
 |--------|------|--------|
-| GET | `/api/domains` | List all domains (with categories + patterns) |
+| GET | `/api/domains` | List all domains (with categories + spells) |
 | POST | `/api/domains` | Create domain |
 | PUT | `/api/domains/:slug` | Update domain |
 | DELETE | `/api/domains/:slug` | Delete domain (cascades) |
 | POST | `/api/domains/:slug/categories` | Create category |
 | PUT | `/api/domains/:slug/categories/:catSlug` | Update category |
 | DELETE | `/api/domains/:slug/categories/:catSlug` | Delete category (cascades) |
-| POST | `/api/domains/:slug/categories/:catSlug/patterns` | Create pattern |
-| PUT | `/api/patterns/:id` | Update pattern |
-| DELETE | `/api/patterns/:id` | Delete pattern |
+| POST | `/api/domains/:slug/categories/:catSlug/spells` | Create spell |
+| PUT | `/api/spells/:id` | Update spell |
+| DELETE | `/api/spells/:id` | Delete spell |
 
 All endpoints return JSON. Errors return `{ error: string }` with appropriate status codes.
 
@@ -63,7 +63,7 @@ Create `src/public/index.html` — a single self-contained HTML file with embedd
   - "New" button at each level opens an inline form
   - Edit button on each card toggles inline editing
   - Delete button with browser `confirm()` dialog
-- **Pattern detail**: Template field uses a `<textarea>` for multi-line editing
+- **Spell detail**: Template field uses a `<textarea>` for multi-line editing
 
 ### Serving:
 - Mount `express.static` on `/` pointing to `src/public/`
@@ -85,7 +85,7 @@ Modify `src/http.ts` to:
 
 ## Files Changed/Created
 
-- `src/sqlite-store.ts` — add mutation methods, return ids on patterns
+- `src/sqlite-store.ts` — add mutation methods, return ids on spells
 - `src/api.ts` — new, REST router
 - `src/public/index.html` — new, self-contained frontend
 - `src/http.ts` — mount API + static serving

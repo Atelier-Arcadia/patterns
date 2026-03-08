@@ -101,7 +101,7 @@ npx @modelcontextprotocol/inspector --cli npx tsx src/stdio.ts \
   --method tools/call --tool-name discover \
   --tool-arg domain=software-engineering
 
-# Happy path: match patterns in a category
+# Happy path: match spells in a category
 npx @modelcontextprotocol/inspector --cli npx tsx src/stdio.ts \
   --method tools/call --tool-name match \
   --tool-arg domain=software-engineering \

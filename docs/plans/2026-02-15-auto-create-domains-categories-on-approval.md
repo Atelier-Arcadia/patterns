@@ -4,7 +4,7 @@ Status: In progress
 
 ## Overview
 
-When a pattern suggestion references a domain or category that doesn't yet exist, approving that suggestion should automatically create the new domain or category. The web UI should prominently indicate when approving a suggestion will result in new domains or categories being created.
+When a spell suggestion references a domain or category that doesn't yet exist, approving that suggestion should automatically create the new domain or category. The web UI should prominently indicate when approving a suggestion will result in new domains or categories being created.
 
 ## Increments
 
@@ -12,7 +12,7 @@ When a pattern suggestion references a domain or category that doesn't yet exist
 
 - Add `slugToName()` helper (`"software-engineering"` -> `"Software Engineering"`)
 - Add `ensureDomainExists()` and `ensureCategoryExists()` private helpers
-- Modify `reviewSubmission()` to call these before `addPattern()`, wrapped in a transaction
+- Modify `reviewSubmission()` to call these before `addSpell()`, wrapped in a transaction
 - Update breaking test at line 687 (expects throw -> should expect auto-creation)
 - 6 new store-level tests
 
